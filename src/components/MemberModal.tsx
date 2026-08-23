@@ -5,14 +5,14 @@ import { LEVEL_OPTIONS, POSITION_OPTIONS } from '../types'
 
 interface MemberModalProps {
   initialMember: TeamMember | null
-  existingNames: string[]
+  knownMembers: TeamMember[]
   onSave: (member: TeamMember) => void
   onClose: () => void
 }
 
 export default function MemberModal({
   initialMember,
-  existingNames,
+  knownMembers,
   onSave,
   onClose,
 }: MemberModalProps) {
@@ -26,6 +26,35 @@ export default function MemberModal({
   const [role, setRole] = useState(initialMember?.role ?? '')
   const [comment, setComment] = useState(initialMember?.comment ?? '')
   const [error, setError] = useState('')
+  const [duplicateCandidates, setDuplicateCandidates] = useState<TeamMember[]>([])
+
+  function normalizedName(value: string) {
+    return value.trim().normalize('NFC')
+  }
+
+  function createMember(id = initialMember?.id ?? uuidv4(), memberName = name.trim()): TeamMember {
+    return {
+      id,
+      name: memberName,
+      active,
+      position,
+      level,
+      yearsOfService: yearsOfService.trim() === '' ? null : Number(yearsOfService),
+      role: role.trim(),
+      comment: comment.trim(),
+    }
+  }
+
+  function nextDistinctName(baseName: string) {
+    const usedNames = new Set(knownMembers.map((member) => normalizedName(member.name)))
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    return Array.from(letters).map((letter) => `${baseName} ${letter}`).find((candidate) => !usedNames.has(normalizedName(candidate))) ?? `${baseName} ${knownMembers.length + 1}`
+  }
+
+  function saveAsSeparateMember() {
+    const separateName = nextDistinctName(name.trim())
+    onSave(createMember(uuidv4(), separateName))
+  }
 
   function handleSubmit() {
     const trimmedName = name.trim()
@@ -33,25 +62,23 @@ export default function MemberModal({
       setError('이름을 입력하세요.')
       return
     }
-    if (existingNames.some((n) => n === trimmedName && n !== initialMember?.name)) {
-      setError(`팀원명 '${trimmedName}'은(는) 이미 존재합니다.`)
+    const sameNameMembers = knownMembers.filter((member) => (
+      normalizedName(member.name) === normalizedName(trimmedName) && member.id !== initialMember?.id
+    ))
+    if (!initialMember && sameNameMembers.length > 0) {
+      setDuplicateCandidates(sameNameMembers)
       return
     }
-    onSave({
-      id: initialMember?.id ?? uuidv4(),
-      name: trimmedName,
-      active,
-      position,
-      level,
-      yearsOfService: yearsOfService.trim() === '' ? null : Number(yearsOfService),
-      role: role.trim(),
-      comment: comment.trim(),
-    })
+    if (initialMember && sameNameMembers.length > 0) {
+      setError(`팀원명 '${trimmedName}'은(는) 이미 존재합니다. 다른 이름으로 수정하세요.`)
+      return
+    }
+    onSave(createMember())
   }
 
   return (
     <div className="ui-modal-backdrop">
-      <div className="ui-modal-panel max-w-sm">
+      <div className="ui-modal-panel relative max-w-sm">
         <h3 className="ui-modal-title">{initialMember ? '팀원 수정' : '팀원 추가'}</h3>
 
         <div className="mt-4 max-h-[70vh] space-y-4 overflow-y-auto pr-1">
@@ -165,6 +192,36 @@ export default function MemberModal({
             저장
           </button>
         </div>
+
+        {duplicateCandidates.length > 0 && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/95 p-5">
+            <div className="w-full rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <h4 className="text-base font-semibold text-gray-950">같은 이름의 팀원이 있습니다</h4>
+              <p className="mt-1 text-sm leading-5 text-gray-500">기존 팀원에 연결하면 이전 평가 이력과 면담 기록이 이어집니다.</p>
+              <div className="mt-3 space-y-2">
+                {duplicateCandidates.map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => onSave(createMember(member.id, member.name))}
+                    className="flex w-full items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-left text-sm hover:border-gray-400 hover:bg-gray-50"
+                  >
+                    <span className="font-medium text-gray-950">{member.name}</span>
+                    <span className="text-xs text-gray-500">기존 팀원에 연결</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={saveAsSeparateMember}
+                className="ui-button ui-button-secondary mt-3 w-full"
+              >
+                별도 팀원으로 추가 · {nextDistinctName(name.trim())}
+              </button>
+              <button type="button" onClick={() => setDuplicateCandidates([])} className="mt-3 w-full text-sm font-medium text-gray-500 hover:text-gray-950">이름 다시 입력</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

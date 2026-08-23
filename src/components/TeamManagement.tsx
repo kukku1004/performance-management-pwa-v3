@@ -10,9 +10,11 @@ import Badge from './Badge'
 import SectionHeader from './SectionHeader'
 import PeerReviewSection from './PeerReviewSection'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
+import { useWorkspace } from '../state/WorkspaceContext'
 
 export default function TeamManagement() {
   const { state, dispatch } = useAppState()
+  const { activeTeam } = useWorkspace()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [deletingMember, setDeletingMember] = useState<TeamMember | null>(null)
@@ -32,7 +34,7 @@ export default function TeamManagement() {
   }
 
   function handleSave(member: TeamMember) {
-    if (editingMember) {
+    if (editingMember || state.members.some((existing) => existing.id === member.id)) {
       dispatch({ type: 'UPDATE_MEMBER', payload: member })
     } else {
       dispatch({ type: 'ADD_MEMBER', payload: member })
@@ -191,7 +193,7 @@ export default function TeamManagement() {
       {modalOpen && (
         <MemberModal
           initialMember={editingMember}
-          existingNames={state.members.map((m) => m.name)}
+          knownMembers={activeTeam?.members ?? state.members}
           onSave={handleSave}
           onClose={() => {
             setModalOpen(false)
