@@ -334,6 +334,13 @@ function peerReviewParticipants(taskId: string, members: TeamMember[], contribut
   return members.filter((member) => contributions.some((item) => item.taskId === taskId && item.memberId === member.id && item.contributionPercent > 0))
 }
 
+function evenlyDistributedPercentages(count: number) {
+  if (count <= 0) return []
+  const base = Math.floor(100 / count)
+  const remainder = 100 - base * count
+  return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0))
+}
+
 function safeSheetName(value: string, index: number) {
   const name = value.replace(/[\\/?*\[\]:]/g, '').slice(0, 25) || `과제${index + 1}`
   return `${index + 1}_${name}`.slice(0, 31)
@@ -373,7 +380,7 @@ function applyPeerReviewSheetLayout(ws: XLSX.WorkSheet, participantCount: number
 }
 
 export async function downloadMemberPeerReviewTemplates({
-  projectId: _projectId, periodLabel, periodFileName, tasks, members, contributions, includeGrade,
+  projectId: _projectId, periodLabel, periodFileName, tasks, members, contributions: _contributions, includeGrade,
 }: {
   projectId: string
   periodLabel: string
@@ -386,8 +393,6 @@ export async function downloadMemberPeerReviewTemplates({
   const generated: string[] = []
   const files: { name: string; data: Uint8Array }[] = []
   for (const reviewer of members) {
-    const reviewerTasks = tasks.filter((task) => peerReviewParticipants(task.id, members, contributions).some((member) => member.id === reviewer.id))
-    if (reviewerTasks.length === 0) continue
     const wb = XLSX.utils.book_new()
     const guide = XLSX.utils.aoa_to_sheet([
       ['피어리뷰 입력 안내'],
@@ -396,28 +401,28 @@ export async function downloadMemberPeerReviewTemplates({
       [],
       ['입력 방법'],
       ['1', '과제별 시트의 연한 입력 칸에 기여도와 수행등급을 입력합니다.'],
-      ['2', '기여도는 과제별 참여자 합계가 100이 되도록 입력합니다.'],
+      ['2', '기여도는 팀원 수에 맞춰 100%로 균등 배분되어 있으며 필요하면 조정할 수 있습니다.'],
       ['3', '근거에는 관찰한 행동이나 결과를 짧고 구체적으로 작성합니다.'],
-      ['4', '시트명과 팀원 이름은 변경하지 않고 완성한 파일을 업로드합니다.'],
     ])
     guide['!cols'] = [{ wch: 14 }, { wch: 68 }]
-    guide['!rows'] = [{ hpt: 32 }, { hpt: 24 }, { hpt: 24 }, { hpt: 10 }, { hpt: 26 }, { hpt: 28 }, { hpt: 28 }, { hpt: 28 }, { hpt: 28 }]
+    guide['!rows'] = [{ hpt: 32 }, { hpt: 24 }, { hpt: 24 }, { hpt: 10 }, { hpt: 26 }, { hpt: 28 }, { hpt: 28 }, { hpt: 28 }]
     guide['!merges'] = [XLSX.utils.decode_range('A1:B1')]
     XLSX.utils.book_append_sheet(wb, guide, '안내')
     const meta = XLSX.utils.aoa_to_sheet([
-      ['구분', '값'], ['평가기간', periodLabel], ['평가자', reviewer.name], ['양식버전', 4],
+      ['구분', '값'], ['평가기간', periodLabel], ['평가자', reviewer.name], ['양식버전', 5],
     ])
     XLSX.utils.book_append_sheet(wb, meta, '_메타')
-    reviewerTasks.forEach((task, taskIndex) => {
-      const participants = peerReviewParticipants(task.id, members, contributions)
+    tasks.forEach((task, taskIndex) => {
+      const participants = members
+      const equalPercentages = evenlyDistributedPercentages(participants.length)
       const headers = includeGrade ? ['평가 대상', '기여도(%)', '수행등급', '근거'] : ['평가 대상', '기여도(%)', '근거']
       const rows: unknown[][] = [
         [`과제: ${task.name}`],
         [`평가기간: ${periodLabel}`],
         headers,
-        ...participants.map((member) => includeGrade
-          ? [`${member.name}${member.id === reviewer.id ? ' (본인)' : ''}`, '', '', '']
-          : [`${member.name}${member.id === reviewer.id ? ' (본인)' : ''}`, '', ''],
+        ...participants.map((member, memberIndex) => includeGrade
+          ? [`${member.name}${member.id === reviewer.id ? ' (본인)' : ''}`, equalPercentages[memberIndex], '', '']
+          : [`${member.name}${member.id === reviewer.id ? ' (본인)' : ''}`, equalPercentages[memberIndex], ''],
         ),
         includeGrade ? ['기여도 합계', '', '검증', ''] : ['기여도 합계', '', ''],
       ]
@@ -457,6 +462,7 @@ export function parseProjectPeerReviewWorkbook(
   const metaSheet = wb.Sheets._메타
   const metaRows = metaSheet ? XLSX.utils.sheet_to_json<(string | number)[]>(metaSheet, { header: 1, defval: '' }) : []
   const meta = new Map(metaRows.map((row) => [String(row[0]), String(row[1])]))
+  const templateVersion = Number(meta.get('양식버전') || 0)
   const reviewerName = normalizedLabel(meta.get('평가자'))
   const errors: string[] = []
   const periodMatches = !expectedPeriodLabel || normalizedLabel(meta.get('평가기간')) === normalizedLabel(expectedPeriodLabel)
@@ -474,7 +480,7 @@ export function parseProjectPeerReviewWorkbook(
     const taskName = normalizedLabel(rows[0]?.[0]).replace(/^과제:\s*/, '')
     const task = tasks.find((item) => normalizedLabel(item.name) === taskName)
     if (!task) { errors.push(`${sheetName}: 과제를 찾을 수 없습니다.`); continue }
-    const participants = new Set(peerReviewParticipants(task.id, members, contributions).map((member) => member.id))
+    const participants = new Set((templateVersion >= 5 ? members : peerReviewParticipants(task.id, members, contributions)).map((member) => member.id))
     for (const [rowIndex, row] of rows.slice(3).entries()) {
       const targetLabel = normalizedLabel(row[0])
       if (!targetLabel || targetLabel === '기여도 합계') continue
