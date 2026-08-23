@@ -238,8 +238,8 @@ export default function MeetingNotes() {
               ? `minmax(0,1fr) 0 0 6px 48px 1px ${calendarOpen ? 320 : 92}px`
               : `${growthPanelsMinimized ? 97 : leftWidth + centerWidth + 6}px 0 0 6px minmax(420px, 1fr) 1px ${calendarOpen ? 320 : 92}px` }}
           >
-          <aside className={`min-w-0 overflow-y-auto ${growthPanelsMinimized ? 'px-0 pb-4 pt-0' : 'px-4 pb-4 pt-5'}`}>
-            {selectedMember && <MemberGrowthOverview member={selectedMember} compact collapsible hideSummary onPanelMinimizedChange={setGrowthPanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} />}
+          <aside className={`min-w-0 overflow-y-auto ${growthPanelsMinimized ? 'px-0 pb-4 pt-0' : 'px-4 pb-4 pt-0'}`}>
+            {selectedMember && <MemberGrowthOverview member={selectedMember} compact collapsible hideSummary removeTopSpacing onPanelMinimizedChange={setGrowthPanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} />}
           </aside>
           <span aria-hidden="true" />
           <main className={`relative col-start-5 row-start-1 min-w-0 overflow-y-auto ${meetingPanelMinimized ? 'px-1 py-3' : 'px-5 pb-5 pt-5'}`}>
