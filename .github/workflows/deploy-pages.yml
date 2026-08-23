@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy Codex V3 to GitHub Pages
 
 on:
   push:
@@ -19,86 +19,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout production (main)
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: site-main
-
-      - name: Checkout preview (claude/v2-workspace-periods)
-        uses: actions/checkout@v4
-        with:
-          ref: claude/v2-workspace-periods
-          path: site-preview
-
-      - name: Checkout preview-v2 (claude/performance-management-pwa-v2-2ba605)
-        uses: actions/checkout@v4
-        with:
-          ref: claude/performance-management-pwa-v2-2ba605
-          path: site-preview-v2
-
-      - name: Checkout preview-v3 (codex/performance-management-pwa-v3)
-        uses: actions/checkout@v4
-        with:
-          ref: codex/performance-management-pwa-v3
-          path: site-preview-v3
-
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: |
-            site-main/package-lock.json
-            site-preview/package-lock.json
-            site-preview-v2/package-lock.json
-            site-preview-v3/package-lock.json
-
-      - name: Build production
-        working-directory: site-main
-        run: |
-          npm ci
-          npm run build
-
-      - name: Build preview
-        working-directory: site-preview
-        run: |
-          npm ci
-          npm run build
+      - run: npm ci
+      - run: npm run build
         env:
-          VITE_BASE_PATH: /desktop-tutorial/preview/
-
-      - name: Build preview-v2
-        working-directory: site-preview-v2
-        run: |
-          npm ci
-          npm run build
-        env:
-          VITE_BASE_PATH: /desktop-tutorial/preview-v2/
-
-      - name: Build preview-v3
-        working-directory: site-preview-v3
-        run: |
-          npm ci
-          npm run build
-        env:
-          VITE_BASE_PATH: /desktop-tutorial/preview-v3/
-          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
-
-      - name: Combine into one Pages artifact
-        run: |
-          mkdir -p combined
-          cp -r site-main/dist/. combined/
-          mkdir -p combined/preview
-          cp -r site-preview/dist/. combined/preview/
-          mkdir -p combined/preview-v2
-          cp -r site-preview-v2/dist/. combined/preview-v2/
-          mkdir -p combined/preview-v3
-          cp -r site-preview-v3/dist/. combined/preview-v3/
-
+          VITE_BASE_PATH: /performance-management-pwa-v3/
+          VITE_GOOGLE_CLIENT_ID: 493396486126-l2ej5euph6b2b7rgal1apttnocnrnbhi.apps.googleusercontent.com
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: combined
+          path: dist
 
   deploy:
     needs: build
