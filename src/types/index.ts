@@ -113,6 +113,7 @@ export interface MemberPersonalNote {
   id: string
   content: string
   color: 'gray' | 'orange' | 'blue' | 'green' | 'violet'
+  starred?: boolean
 }
 
 export interface GrowthPerformanceRecord {
