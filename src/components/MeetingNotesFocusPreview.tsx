@@ -43,6 +43,7 @@ export default function MeetingNotesFocusPreview({
   const [noteAdding, setNoteAdding] = useState(false)
   const [noteInput, setNoteInput] = useState('')
   const [noteColorPicker, setNoteColorPicker] = useState<string | null>(null)
+  const [referencePanelsMinimized, setReferencePanelsMinimized] = useState(false)
   const layoutRef = useRef<HTMLDivElement>(null)
   const [timelineWidth, setTimelineWidth] = useState(92)
   const [documentWidth, setDocumentWidth] = useState(700)
@@ -97,7 +98,9 @@ export default function MeetingNotesFocusPreview({
       </button>)}
     </div>
 
-    <div ref={layoutRef} className="meeting-focus-workspace" style={{ gridTemplateColumns: `${calendarOpen ? Math.max(320, timelineWidth) : timelineWidth}px 6px minmax(440px, ${documentWidth}px) 6px minmax(220px, 1fr)` }}>
+    <div ref={layoutRef} className={`meeting-focus-workspace ${referencePanelsMinimized ? 'meeting-focus-workspace-expanded' : ''}`} style={{ gridTemplateColumns: referencePanelsMinimized
+      ? `${calendarOpen ? Math.max(320, timelineWidth) : timelineWidth}px 6px minmax(720px, 1fr) 6px 98px`
+      : `${calendarOpen ? Math.max(320, timelineWidth) : timelineWidth}px 6px minmax(440px, ${documentWidth}px) 6px minmax(220px, 1fr)` }}>
       <aside className="meeting-focus-timeline">
         <MeetingCalendar notes={allNotes} members={members} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
         <div className="mb-4 mt-3 flex items-center justify-between"><p className="text-xs font-semibold text-gray-600">면담 히스토리</p><span className="text-[10px] text-gray-400">{sortedNotes.length}건</span></div>
@@ -125,11 +128,16 @@ export default function MeetingNotesFocusPreview({
           </div>
         </section>
 
+        <div className={`meeting-focus-content ${referencePanelsMinimized ? 'meeting-focus-content-expanded' : ''}`}>
+        <div className="meeting-focus-compose">
         <section className="mt-6">
           <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="ui-section-title">면담일지</h3><input type="date" value={newDate} onChange={(event) => onDateChange(event.target.value)} className="ui-field w-auto" /></div>
           <textarea value={newComment} onChange={(event) => onCommentChange(event.target.value)} rows={7} placeholder="면담 내용을 입력하세요." className="ui-field mt-3 resize-y" />
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-1" aria-label="면담 분위기">{MOODS.map((mood) => <button key={mood} type="button" onClick={() => onMoodChange(newMood === mood ? '' : mood)} className={`flex h-8 w-8 items-center justify-center rounded-md border ${newMood === mood ? 'border-orange-400 bg-orange-50' : 'border-transparent hover:border-gray-200'}`}>{mood}</button>)}</div><button type="button" onClick={onAdd} disabled={!newComment.trim()} className="ui-button ui-button-primary">작성하기</button></div>
         </section>
+        </div>
+
+        <div className="meeting-focus-context">
 
         {insights.length > 0 && <section className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4">
           <button type="button" onClick={() => setInsightsOpen((value) => !value)} className="flex w-full items-center justify-between py-3 text-left"><h3 className="text-sm font-semibold text-amber-950">면담 인사이트</h3><DisclosureIcon open={insightsOpen} className="h-4 w-4 text-amber-700" /></button>
@@ -142,9 +150,11 @@ export default function MeetingNotesFocusPreview({
         </section>
 
         {selectedNote && <section className="mt-8 border-t border-gray-200 pt-5 print:block"><p className="text-xs font-medium text-gray-400">선택한 면담 상세</p><div className="mt-2 flex items-center gap-2"><strong>{selectedNote.date}</strong>{selectedNote.mood && <span>{selectedNote.mood}</span>}</div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">{selectedNote.comment}</p></section>}
+        </div>
+        </div>
       </main>
       <button type="button" aria-label="면담일지와 성과·성장 영역 너비 조절" onPointerDown={(event) => startResize('document', event)} className="meeting-focus-splitter"><span /></button>
-      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
+      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
   </div>
 }

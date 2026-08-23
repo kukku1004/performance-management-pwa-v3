@@ -89,6 +89,12 @@
 .meeting-focus-timeline { min-width: 0; overflow: visible; padding: 0 8px 96px; }
 .meeting-focus-document { min-width: 0; overflow-y: auto; padding: 24px 28px 96px; }
 .meeting-focus-reference { min-width: 0; overflow: hidden; background: #f9fafb; }
+.meeting-focus-content { min-width: 0; }
+.meeting-focus-content-expanded { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.1fr); gap: 28px; align-items: start; margin-top: 24px; }
+.meeting-focus-content-expanded .meeting-focus-context { grid-column: 1; grid-row: 1; }
+.meeting-focus-content-expanded .meeting-focus-compose { grid-column: 2; grid-row: 1; }
+.meeting-focus-content-expanded .meeting-focus-context > :first-child,
+.meeting-focus-content-expanded .meeting-focus-compose > :first-child { margin-top: 0; }
 
 .meeting-focus-splitter {
   display: flex;
@@ -119,6 +125,11 @@
   .meeting-focus-document { padding-inline: 20px; }
   .meeting-focus-summary { align-items: stretch; }
   .meeting-focus-score-grid { width: 100%; }
+}
+
+@media (max-width: 1480px) {
+  .meeting-focus-content-expanded { display: block; margin-top: 24px; }
+  .meeting-focus-content-expanded .meeting-focus-context { margin-top: 24px; }
 }
 
 @media (max-width: 760px) {
