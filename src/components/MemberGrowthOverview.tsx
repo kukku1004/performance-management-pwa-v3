@@ -5,15 +5,13 @@ import { useWorkspace } from '../state/WorkspaceContext'
 import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory, GRADE_POINTS, mergeProjectHistoryForSimulation } from '../utils/growth'
 import PromotionCriteriaDialog from './PromotionCriteriaDialog'
 import ExpandCollapseIcon from './ExpandCollapseIcon'
-import DisclosureIcon from './DisclosureIcon'
 
-export default function MemberGrowthOverview({ member, collapsedContent, onExpandedChange, onPanelMinimizedChange, hideSummary = false }: { member: TeamMember; compact?: boolean; collapsible?: boolean; collapsedContent?: ReactNode; onExpandedChange?: (expanded: boolean) => void; onPanelMinimizedChange?: (bothMinimized: boolean) => void; hideSummary?: boolean }) {
+export default function MemberGrowthOverview({ member, collapsedContent, onPanelMinimizedChange, hideSummary = false }: { member: TeamMember; compact?: boolean; collapsible?: boolean; collapsedContent?: ReactNode; onPanelMinimizedChange?: (bothMinimized: boolean) => void; hideSummary?: boolean }) {
   const { workspace, activeTeam, saveGrowthProfile } = useWorkspace()
   const [noteInput, setNoteInput] = useState('')
   const [noteAdding, setNoteAdding] = useState(false)
   const [noteColorPicker, setNoteColorPicker] = useState<string | null>(null)
   const [criteriaOpen, setCriteriaOpen] = useState(false)
-  const [expanded, setExpanded] = useState(true)
   const [simulationPanelMinimized, setSimulationPanelMinimized] = useState(false)
   const [performancePanelMinimized, setPerformancePanelMinimized] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -70,14 +68,6 @@ export default function MemberGrowthOverview({ member, collapsedContent, onExpan
     setNoteAdding(false)
   }
 
-  function toggleExpanded() {
-    setExpanded((value) => {
-      const next = !value
-      onExpandedChange?.(next)
-      return next
-    })
-  }
-
   function startSimulationResize(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
     const layout = splitLayoutRef.current
@@ -115,13 +105,11 @@ export default function MemberGrowthOverview({ member, collapsedContent, onExpan
           <div className="flex min-h-9 flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
             <span className="text-sm font-semibold text-slate-800">승진 시뮬레이션</span>
             <label><span className="sr-only">승진심사 시기</span><input type="month" value={profile.promotionReviewDate} onChange={(event) => updateProfile({ promotionReviewDate: event.target.value })} className="ui-field ui-field-sm w-36 bg-white" /></label>
-            <span className="ml-auto flex items-center gap-1"><button type="button" onClick={() => setCriteriaOpen(true)} className="ui-button ui-button-ghost ui-button-sm">기준 보기</button><button type="button" onClick={toggleExpanded} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title={expanded ? '승진 시뮬레이션 접기' : '승진 시뮬레이션 펼치기'} aria-label={expanded ? '승진 시뮬레이션 접기' : '승진 시뮬레이션 펼치기'}><DisclosureIcon open={expanded} /></button><button type="button" onClick={() => setSimulationPanelMinimized(true)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="승진 시뮬레이션 영역 최소화" aria-label="승진 시뮬레이션 영역 최소화"><ExpandCollapseIcon expanded /></button></span>
+            <span className="ml-auto flex items-center gap-1"><button type="button" onClick={() => setCriteriaOpen(true)} className="ui-button ui-button-ghost ui-button-sm">기준 보기</button><button type="button" onClick={() => setSimulationPanelMinimized(true)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="승진 시뮬레이션 영역 최소화" aria-label="승진 시뮬레이션 영역 최소화"><ExpandCollapseIcon expanded /></button></span>
           </div>
-          {expanded && <>
-            <p className="-mt-3 text-xs leading-5 text-slate-500">{reviewLabel} 심사 기준으로 {firstYear ?? '-'}년부터 {lastYear ?? '-'}년까지의 5년 데이터를 반영합니다.</p>
+          <p className="-mt-3 text-xs leading-5 text-slate-500">{reviewLabel} 심사 기준으로 {firstYear ?? '-'}년부터 {lastYear ?? '-'}년까지의 5년 데이터를 반영합니다.</p>
             <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white"><div className="min-w-[360px]"><div className="grid grid-cols-[48px_repeat(3,minmax(48px,1fr))_56px] bg-slate-50 text-center text-xs font-semibold text-slate-500"><span className="px-1 py-3 text-left">연도</span><span className="px-1 py-3">업적(상)</span><span className="px-1 py-3">업적(하)</span><span className="px-1 py-3">역량 ×2</span><span className="px-1 py-3">가중합</span></div>{simulation.rows.map((row) => <div key={row.year} className="grid grid-cols-[48px_repeat(3,minmax(48px,1fr))_56px] items-center border-t border-slate-100"><strong className="px-1 py-3 text-sm text-slate-700">{row.year}</strong>{([['firstHalf', '상반기 업적'], ['secondHalf', '하반기 업적'], ['competency', '역량']] as const).map(([key, label]) => <label key={key} className="min-w-0 border-l border-slate-100 px-1 py-2"><span className="sr-only">{row.year} {label}</span><select value={row[key] ?? ''} onChange={(event) => updateHistory(row.year, key, event.target.value)} className="ui-field ui-field-sm mx-auto min-w-[44px] max-w-16 bg-white px-1 text-center"><option value="">-</option>{PERFORMANCE_GRADE_OPTIONS.map((grade) => <option key={grade}>{grade}</option>)}</select></label>)}<span className="border-l border-slate-100 px-1 py-3 text-center text-sm font-semibold tabular-nums">{row.weighted.toFixed(1)}</span></div>)}<div className="grid grid-cols-[1fr_auto_auto] items-center border-t border-slate-200 bg-amber-50 px-3 py-3 text-sm"><strong>합계</strong><span className="mr-4 text-xs text-slate-600">성과 {performanceTotal.toFixed(1)} + 역량 {competencyTotal.toFixed(1)} + 보조 {simulation.auxiliaryScore.toFixed(1)}</span><strong className="text-orange-700">{simulation.currentScore.toFixed(1)}점</strong></div></div></div>
             <div className={`rounded-lg bg-gray-50 px-4 py-3 ${narrowPanel ? 'grid grid-cols-2 gap-x-10 gap-y-2' : 'flex flex-wrap items-center gap-5'}`}><div className={`flex shrink-0 items-center gap-2 ${narrowPanel ? 'col-span-2 justify-between' : ''}`}><h4 className="ui-section-title">보조지표</h4><strong className="text-sm">합계 {simulation.auxiliaryScore}점</strong></div>{([['position', '직책'], ['rewardPenalty', '상벌'], ['tenure', '체류'], ['education', '교육']] as const).map(([key, label]) => <label key={key} className="flex min-w-0 items-center gap-2"><span className="shrink-0 text-xs font-medium text-gray-600">{label}</span><input type="number" value={profile.auxiliaryMetrics?.[key] ?? 0} onChange={(event) => updateAuxiliary(key, event.target.value)} className="ui-field ui-field-sm w-16 bg-white text-right" /></label>)}</div>
-          </>}
           </>}
         </div>
         {!simulationPanelMinimized && !performancePanelMinimized && collapsedContent ? <button type="button" aria-label="성과와 승진 시뮬레이션 영역 너비 조절" onPointerDown={startSimulationResize} className="group col-start-2 row-start-1 flex min-h-full cursor-col-resize items-center justify-center border-x border-slate-200 bg-white hover:bg-orange-50"><span className="h-10 w-0.5 rounded-full bg-slate-300 group-hover:bg-orange-400" /></button> : <span className="col-start-2 row-start-1 bg-slate-200" aria-hidden="true" />}
