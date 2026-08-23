@@ -9,6 +9,9 @@ import { formatEvaluationPeriod } from '../utils/workspace'
 type StartMode = 'direct' | 'excel' | 'previous'
 type DirectTarget = 'tasks' | 'members'
 
+const QUICK_START_CLOSE_ICON = `${import.meta.env.BASE_URL}assets/quick-start-close.svg`
+const QUICK_START_REMOVE_ICON = `${import.meta.env.BASE_URL}assets/quick-start-remove.svg`
+
 interface ProjectSetupStartProps {
   open: boolean
   onClose: () => void
@@ -25,16 +28,6 @@ function normalizedName(value: string) {
 function mergeNames(current: string[], additions: string[]) {
   const existing = new Set(current.map(normalizedName))
   return [...current, ...additions.filter((name) => !existing.has(normalizedName(name)))]
-}
-
-function StartModeIcon({ mode }: { mode: StartMode }) {
-  if (mode === 'excel') {
-    return <svg className="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 2.75h8l4 4V21.25H6z" /><path d="M14 2.75v4h4" /></svg>
-  }
-  if (mode === 'direct') {
-    return <svg className="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6a2.1 2.1 0 0 0-3-3L5.2 16z" /><path d="m14.5 6.7 2.8 2.8" /></svg>
-  }
-  return <svg className="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.3-5.8" /><path d="M3.5 4.5v5h5" /><path d="M12 7.5V12l3 1.8" /></svg>
 }
 
 export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartProps) {
@@ -167,26 +160,26 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
         aria-pressed={selected}
         onClick={() => selectDirectTarget(target)}
         onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') selectDirectTarget(target) }}
-        className={`min-h-44 cursor-text rounded-lg border p-4 transition-colors ${selected ? 'border-accent bg-orange-50/40' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+        className={`h-[180px] cursor-text overflow-y-auto rounded-xl border p-6 transition-colors ${selected ? 'border-[1.5px] border-accent bg-[#faf6f2]' : 'border-gray-200 bg-white hover:border-gray-300'}`}
       >
         <div className="flex items-center justify-between gap-3">
-          <h3 className="ui-section-title">{title}</h3>
-          <span className="text-xs text-gray-500">현재 {currentCount}{target === 'tasks' ? '개' : '명'} · 추가 {drafts.length}</span>
+          <h3 className="text-base font-semibold text-gray-950">{title}</h3>
+          <span className="text-[13px] text-gray-500">현재 {currentCount}{target === 'tasks' ? '개' : '명'} · 추가 {drafts.length}</span>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {drafts.map((name) => (
-            <span key={name} className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 text-sm text-gray-800">
+            <span key={name} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800">
               {name}
               <button
                 type="button"
-                className="ml-0.5 text-gray-400 hover:text-gray-900"
+                className="ml-0.5 flex h-5 w-5 items-center justify-center rounded hover:bg-gray-100"
                 aria-label={`${name} 삭제`}
                 onClick={(event) => {
                   event.stopPropagation()
                   if (target === 'tasks') setTaskDrafts((current) => current.filter((item) => item !== name))
                   else setMemberDrafts((current) => current.filter((item) => item !== name))
                 }}
-              >×</button>
+              ><img src={QUICK_START_REMOVE_ICON} alt="" className="h-2.5 w-2.5" /></button>
             </span>
           ))}
           {drafts.length === 0 && <p className="text-sm text-gray-400">이 영역을 선택한 뒤 아래에서 이름을 입력하세요.</p>}
@@ -197,40 +190,39 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
   return (
     <div className="ui-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="quick-start-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div className="ui-modal-panel flex h-[min(680px,calc(100vh-2rem))] max-w-4xl flex-col overflow-hidden">
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 pb-4">
-          <div><h2 id="quick-start-title" className="ui-modal-title">빠른 시작</h2><p className="mt-1 text-sm text-gray-500">과제와 팀원을 빠르게 준비합니다. 닫으면 기존 화면에서 각각 입력할 수 있습니다.</p></div>
-          <button type="button" onClick={onClose} className="ui-button ui-button-ghost ui-button-sm" aria-label="빠른 시작 닫기">×</button>
+      <div className="ui-modal-panel flex h-[min(600px,calc(100vh-2rem))] max-w-[992px] flex-col overflow-hidden !rounded-2xl !p-8">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 pb-5">
+          <div><h2 id="quick-start-title" className="text-[22px] font-semibold leading-7 text-gray-950">빠른 시작</h2><p className="mt-1.5 text-sm text-gray-500">과제와 팀원을 빠르게 준비합니다. 닫으면 기존 화면에서 각각 입력할 수 있습니다.</p></div>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-gray-100" aria-label="빠른 시작 닫기"><img src={QUICK_START_CLOSE_ICON} alt="" className="h-3.5 w-3.5" /></button>
         </div>
 
-        <div className="mt-5 grid shrink-0 gap-2" role="tablist" aria-label="빠른 시작 방식">
-          {([['excel', 'Excel로 한 번에 시작', '과제·팀원 통합 양식을 받아서 채운 뒤 업로드하면 한 번에 등록됩니다.'], ['direct', '직접 입력', '과제와 팀원을 이름부터 빠르게 등록합니다.'], ['previous', '이전 평가에서 가져오기', '다른 팀·평가기간의 과제와 팀원을 선택해 이어받습니다.']] as const).map(([value, label, description]) => (
-            <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => { setMode(value); setMessage('') }} className={`group flex min-h-[72px] items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors ${mode === value ? 'border-accent bg-orange-50/50' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}`}>
-              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${mode === value ? 'bg-orange-100 text-accent' : 'bg-gray-50 text-gray-500 group-hover:text-gray-700'}`}><span className="h-6 w-6"><StartModeIcon mode={value} /></span></span>
-              <span className="min-w-0"><span className="block text-sm font-semibold text-gray-950">{label}</span><span className="mt-1 block text-sm leading-5 text-gray-500">{description}</span></span>
-              {mode === value && <span className="ml-auto shrink-0 text-xs font-semibold text-accent">선택됨</span>}
+        <div className="flex shrink-0 overflow-x-auto border-b border-gray-200" role="tablist" aria-label="빠른 시작 방식">
+          {([['direct', '직접 입력', '선택한 영역에 이름을 빠르게 등록'], ['excel', 'Excel로 시작', '통합 양식으로 내려받고 일괄 등록'], ['previous', '이전 평가 가져오기', '팀과 평가기간을 골라 선택 복사']] as const).map(([value, label, description]) => (
+            <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => { setMode(value); setMessage('') }} className={`min-w-[190px] flex-1 border-b-2 px-4 py-4 text-left transition-colors ${mode === value ? 'border-accent' : 'border-transparent hover:bg-gray-50'}`}>
+              <span className="block text-base font-semibold text-gray-950">{label}</span>
+              <span className="mt-1 block truncate text-[13px] leading-5 text-gray-500">{description}</span>
             </button>
           ))}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pt-5">
+        <div className="min-h-0 flex-1 overflow-y-auto pt-6">
           {mode === 'direct' && <div>
             <div className="grid gap-4 md:grid-cols-2">
               {renderDraftPanel('tasks', '과제', state.tasks.length, taskDrafts)}
               {renderDraftPanel('members', '팀원', state.members.length, memberDrafts)}
             </div>
-            <div className="mt-4 flex gap-2 border-t border-gray-200 pt-4">
+            <div className="mt-6 flex flex-col gap-2 border-t border-gray-200 pt-5 sm:flex-row">
               <input
                 ref={nameInputRef}
                 value={draftInput}
                 onChange={(event) => setDraftInput(event.target.value)}
                 onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addDraft() } }}
                 placeholder={`${directTarget === 'tasks' ? '과제명' : '팀원명'}을 입력하고 Enter`}
-                className="ui-field"
+                className="ui-field !h-11"
                 autoFocus
               />
-              <button type="button" onClick={addDraft} disabled={!draftInput.trim()} className="ui-button ui-button-secondary shrink-0">추가</button>
-              <button type="button" onClick={addNames} disabled={!draftInput.trim() && taskDrafts.length === 0 && memberDrafts.length === 0} className="ui-button ui-button-primary shrink-0">등록 완료</button>
+              <button type="button" onClick={addDraft} disabled={!draftInput.trim()} className="ui-button ui-button-secondary h-11 shrink-0">추가</button>
+              <button type="button" onClick={addNames} disabled={!draftInput.trim() && taskDrafts.length === 0 && memberDrafts.length === 0} className="ui-button ui-button-primary h-11 shrink-0">등록 완료</button>
             </div>
           </div>}
 
@@ -276,7 +268,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
           </section>}
         </div>
 
-        <div className="mt-4 flex min-h-14 shrink-0 items-center justify-between gap-4 border-t border-gray-200 pt-4"><p className="text-sm text-success">{message}</p><button type="button" onClick={onClose} className="ui-button ui-button-secondary">닫기</button></div>
+        {message && <div className="mt-4 shrink-0 border-t border-gray-200 pt-4"><p className="text-sm text-success">{message}</p></div>}
       </div>
     </div>
   )
