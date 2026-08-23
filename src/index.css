@@ -53,16 +53,26 @@
 .meeting-focus-member-tab-active { background: #111827; color: #fff; border-color: #111827; }
 
 .meeting-focus-summary {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 392px);
+  grid-template-areas:
+    "member scores"
+    "memos memos";
   align-items: center;
-  gap: 24px;
+  column-gap: 24px;
+  row-gap: 10px;
   border-bottom: 1px solid #e5e7eb;
   background: #fff;
-  padding: 0 0 20px;
+  padding: 10px 0 12px;
 }
 
+.meeting-focus-member-title { grid-area: member; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.meeting-focus-member-title h2 { color: #111827; font-size: 20px; font-weight: 700; line-height: 1.25; }
+.meeting-focus-member-title span { color: #6b7280; font-size: 14px; }
+.meeting-focus-memos { grid-area: memos; display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px; }
+
 .meeting-focus-score-grid {
+  grid-area: scores;
   display: grid;
   width: min(100%, 392px);
   flex-shrink: 0;
@@ -122,7 +132,7 @@
 
 @media (max-width: 1100px) {
   .meeting-focus-document { padding-inline: 20px; }
-  .meeting-focus-summary { align-items: stretch; }
+  .meeting-focus-summary { grid-template-columns: 1fr; grid-template-areas: "member" "scores" "memos"; align-items: stretch; }
   .meeting-focus-score-grid { width: 100%; }
 }
 
