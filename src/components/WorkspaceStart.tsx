@@ -203,7 +203,7 @@ export default function WorkspaceStart() {
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="ui-section-header border-b border-gray-200 pb-4">
           <div><h2 className="ui-section-title">팀과 평가 프로젝트</h2><p className="ui-section-description">진행할 팀과 평가기간을 선택하세요.</p></div>
-          <div className="flex items-center gap-2"><button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-secondary">+ 새 팀</button><button type="button" onClick={() => selectedTeam ? openProject(selectedTeam) : setCreatingTeam(true)} className="ui-button ui-button-primary">+ 새 평가 프로젝트</button></div>
+          <div className="flex items-center gap-2"><button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-secondary">+ 새 팀</button></div>
         </div>
 
         {workspace.teams.length === 0 ? (
@@ -213,7 +213,7 @@ export default function WorkspaceStart() {
             <div className="mt-5 flex gap-2 overflow-x-auto border-b border-gray-200 pb-0" role="tablist" aria-label="팀 선택">
               {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${active ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-950'}`}>{team.name}<span className="ml-2 text-xs font-medium text-gray-400">{team.members.length}명 · {count}개</span></button> })}
             </div>
-            {(() => { const projects = projectsByTeam.get(selectedTeam.id) ?? []; return <section className="py-6"><div><h3 className="text-lg font-semibold text-gray-950">{selectedTeam.name}</h3><p className="mt-1 text-xs text-gray-500">팀원 {selectedTeam.members.length}명 · 평가 프로젝트 {projects.length}개</p></div>{projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}</section> })()}
+            {(() => { const projects = projectsByTeam.get(selectedTeam.id) ?? []; return <section className="py-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold text-gray-950">{selectedTeam.name}</h3><p className="mt-1 text-xs text-gray-500">팀원 {selectedTeam.members.length}명 · 평가 프로젝트 {projects.length}개</p></div><button type="button" onClick={() => openProject(selectedTeam)} className="ui-button ui-button-secondary ui-button-sm">+ 새 평가 프로젝트</button></div>{projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}</section> })()}
           </>
         ) : null}
       </main>
