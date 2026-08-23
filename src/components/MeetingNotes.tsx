@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppState } from '../state/AppContext'
 import type { MeetingNote, TeamMember } from '../types'
@@ -8,7 +8,7 @@ import MemberGrowthOverview from './MemberGrowthOverview'
 import MeetingCalendar from './MeetingCalendar'
 import RecentPerformanceSummary from './RecentPerformanceSummary'
 import Badge from './Badge'
-import { getMemberEvaluationHistory, getRecentMemberPerformance } from '../utils/growth'
+import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory, getRecentMemberPerformance } from '../utils/growth'
 import { parseGrowthHistoryWorkbook } from '../utils/growthExcel'
 import ExpandCollapseIcon from './ExpandCollapseIcon'
 import DisclosureIcon from './DisclosureIcon'
@@ -60,6 +60,9 @@ export default function MeetingNotes() {
   const [meetingPanelMinimized, setMeetingPanelMinimized] = useState(false)
   const [growthPanelsMinimized, setGrowthPanelsMinimized] = useState(false)
   const [comparisonView, setComparisonView] = useState<'current' | 'improved'>('current')
+  const [memberMemoInput, setMemberMemoInput] = useState('')
+  const [memberMemoAdding, setMemberMemoAdding] = useState(false)
+  const [memberMemoColorPicker, setMemberMemoColorPicker] = useState<string | null>(null)
 
   function startResize(side: 'left' | 'right', event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
@@ -94,6 +97,12 @@ export default function MeetingNotes() {
     .filter((n) => n.memberId === selectedMemberId)
     .sort((a, b) => b.date.localeCompare(a.date))
   const selectedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId)
+  const memberProfile = selectedProfile ?? getDefaultGrowthProfile(selectedMemberId)
+  const memberHistory = activeTeam ? getMemberEvaluationHistory(workspace, activeTeam.id, selectedMemberId) : []
+  const memberSimulation = calculatePromotionSimulation(memberHistory, memberProfile, selectedMember?.level ?? '')
+  const memberCurrentSimulation = calculatePromotionSimulation(memberHistory, { ...memberProfile, performanceHistory: [] }, selectedMember?.level ?? '')
+  const memberGap = Math.round((memberSimulation.currentScore - memberSimulation.targetScore) * 10) / 10
+  const memberPersonalNotes = (memberProfile.personalNotes ?? []).map((note, index) => typeof note === 'string' ? { id: `legacy-${index}`, content: note, color: 'gray' as const } : note)
   const selectedPerformance = activeTeam ? getRecentMemberPerformance(workspace, activeTeam.id, selectedMemberId) : null
   const meetingInsights = [
     ...(selectedProfile?.personalNotes ?? []).map((note) => typeof note === 'string' ? note : note.content),
@@ -102,6 +111,19 @@ export default function MeetingNotes() {
       selectedPerformance.majorTasks.length > 0 ? `${selectedPerformance.majorTasks.map((task) => task.name).join(', ')}에서 맡은 역할과 지원이 필요한 부분을 확인해 보세요.` : '최근 평가기간의 주요 업무와 성과 근거를 확인해 보세요.',
     ] : []),
   ]
+
+  function saveMemberProfile(patch: Partial<typeof memberProfile>) {
+    saveGrowthProfile({ ...memberProfile, ...patch })
+  }
+
+  function addMemberMemo(event: FormEvent) {
+    event.preventDefault()
+    const content = memberMemoInput.trim()
+    if (!content) return
+    saveMemberProfile({ personalNotes: [...memberPersonalNotes, { id: `${Date.now()}-${Math.random()}`, content, color: 'gray' }] })
+    setMemberMemoInput('')
+    setMemberMemoAdding(false)
+  }
 
   function getMemberTabStatus(memberId: string) {
     const now = new Date()
@@ -217,12 +239,18 @@ export default function MeetingNotes() {
               : `${growthPanelsMinimized ? 97 : leftWidth + centerWidth + 6}px 0 0 6px minmax(420px, 1fr) 1px ${calendarOpen ? 320 : 92}px` }}
           >
           <aside className={`min-w-0 overflow-y-auto ${growthPanelsMinimized ? 'px-0 pb-4 pt-0' : 'px-4 pb-4 pt-5'}`}>
-            {selectedMember && <MemberGrowthOverview member={selectedMember} compact collapsible onPanelMinimizedChange={setGrowthPanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} />}
+            {selectedMember && <MemberGrowthOverview member={selectedMember} compact collapsible hideSummary onPanelMinimizedChange={setGrowthPanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} />}
           </aside>
           <span aria-hidden="true" />
           <main className={`relative col-start-5 row-start-1 min-w-0 overflow-y-auto ${meetingPanelMinimized ? 'px-1 py-3' : 'px-5 pb-5 pt-5'}`}>
           {meetingPanelMinimized ? <button type="button" onClick={() => setMeetingPanelMinimized(false)} title="면담 영역 복원" aria-label="면담 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-gray-500 hover:text-gray-950"><ExpandCollapseIcon expanded={false} className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">면담</span></button> : <>
           <button type="button" onClick={() => setMeetingPanelMinimized(true)} title="면담 영역 최소화" aria-label="면담 영역 최소화" className="ui-button ui-button-ghost ui-button-sm absolute right-5 top-4 z-10 h-8 w-8 px-0"><ExpandCollapseIcon expanded className="h-4 w-4" /></button>
+          {selectedMember && <section className="mr-10 flex flex-wrap items-center gap-5 border-b border-gray-200 pb-4">
+            <div className="min-w-[220px] flex-1"><div className="flex flex-wrap items-baseline gap-2"><h2 className="text-xl font-semibold text-gray-950">{selectedMember.name}</h2><span className="text-sm text-gray-500">{selectedMember.level || '직급 미설정'} · {selectedMember.yearsOfService ?? '-'}년차</span></div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">{memberPersonalNotes.map((note) => { const styles = { gray: 'border-gray-200 bg-gray-50 text-gray-700', orange: 'border-orange-200 bg-orange-50 text-orange-800', blue: 'border-blue-200 bg-blue-50 text-blue-800', green: 'border-green-200 bg-green-50 text-green-800', violet: 'border-violet-200 bg-violet-50 text-violet-800' }; const dots = { gray: 'bg-gray-400', orange: 'bg-orange-500', blue: 'bg-blue-500', green: 'bg-green-500', violet: 'bg-violet-500' }; return <span key={note.id} className={`relative inline-flex max-w-52 items-center gap-1 rounded-md border px-2 py-1 text-xs ${styles[note.color]}`}><button type="button" onClick={() => setMemberMemoColorPicker((value) => value === note.id ? null : note.id)} title="메모 색상 선택" aria-label={`${note.content} 메모 색상 선택`} className={`h-2.5 w-2.5 shrink-0 rounded-full ${dots[note.color]}`} /><span className="truncate">{note.content}</span><button type="button" onClick={() => saveMemberProfile({ personalNotes: memberPersonalNotes.filter((item) => item.id !== note.id) })} aria-label={`${note.content} 메모 삭제`} className="text-current opacity-50 hover:opacity-100">×</button>{memberMemoColorPicker === note.id && <span className="absolute left-0 top-full z-20 mt-1 flex gap-1 rounded-md border border-gray-200 bg-white p-2 shadow-sm">{(['gray', 'orange', 'blue', 'green', 'violet'] as const).map((color) => <button key={color} type="button" onClick={() => { saveMemberProfile({ personalNotes: memberPersonalNotes.map((item) => item.id === note.id ? { ...item, color } : item) }); setMemberMemoColorPicker(null) }} aria-label={`${color} 색상 지정`} className={`h-4 w-4 rounded-full ring-1 ring-black/10 ${dots[color]} ${note.color === color ? 'ring-2 ring-gray-950 ring-offset-1' : ''}`} />)}</span>}</span> })}{memberMemoAdding ? <form onSubmit={addMemberMemo} className="flex items-center gap-1"><input autoFocus value={memberMemoInput} onChange={(event) => setMemberMemoInput(event.target.value)} onBlur={() => { if (!memberMemoInput.trim()) setMemberMemoAdding(false) }} placeholder="팀원 메모" className="ui-field ui-field-sm w-40" /><button type="submit" className="ui-button ui-button-secondary ui-button-sm">추가</button></form> : <button type="button" onClick={() => setMemberMemoAdding(true)} className="text-xs font-medium text-gray-500 hover:text-gray-950">+ 메모</button>}</div>
+            </div>
+            <div className="grid w-full shrink-0 grid-cols-3 overflow-hidden rounded-lg border border-gray-200 bg-white sm:w-[392px]"><div className="px-3 py-3"><p className="text-[11px] font-medium text-gray-500">목표 점수</p><p className="mt-1 text-lg font-semibold tabular-nums text-gray-950">{memberSimulation.targetScore}점</p></div><div className="border-x border-gray-200 px-3 py-3"><p className="text-[11px] font-medium text-gray-500">현재 점수</p><p className="mt-1 text-lg font-semibold tabular-nums text-gray-950">{memberCurrentSimulation.currentScore}점</p></div><div className="px-3 py-3"><p className="text-[11px] font-medium text-gray-500">최종 기대 점수</p><div className="mt-1 flex flex-wrap items-baseline gap-1.5"><p className="text-lg font-semibold tabular-nums text-gray-950">{memberSimulation.currentScore}점</p><span className={`text-xs font-semibold ${memberGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{memberGap >= 0 ? `+${memberGap}점 충족` : `-${Math.abs(memberGap)}점 필요`}</span></div></div></div>
+          </section>}
           <div className={`meeting-responsive ${growthPanelsMinimized ? 'meeting-responsive-wide' : ''}`}>
           <div className="contents">
           {meetingInsights.length > 0 && <div className="meeting-responsive-insights rounded-lg border border-amber-200 bg-amber-50 px-4"><button type="button" onClick={() => setInsightsOpen((value) => !value)} className="flex w-full items-center justify-between py-3 text-left" title={insightsOpen ? '면담 인사이트 접기' : '면담 인사이트 펼치기'} aria-label={insightsOpen ? '면담 인사이트 접기' : '면담 인사이트 펼치기'}><h3 className="ui-section-title text-amber-950">면담 인사이트</h3><DisclosureIcon open={insightsOpen} className="h-4 w-4 text-amber-700" /></button>{insightsOpen && <ul className="space-y-2 pb-4 text-sm leading-5 text-amber-950/80">{meetingInsights.map((insight) => <li key={insight} className="flex gap-2"><span className="text-orange-600">•</span><span>{insight}</span></li>)}</ul>}</div>}
@@ -237,8 +265,7 @@ export default function MeetingNotes() {
           </div>
           <div className="contents">
           <div className="meeting-responsive-journal min-w-0">
-          <div className="flex items-center justify-between gap-3"><h3 className="ui-section-title">면담 포인트</h3></div>
-          <div className="mt-3 border-t border-gray-200 pt-4">
+          <div>
             <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold text-gray-950">면담일지</span><input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="ui-field w-auto" /></div>
             <div className="mt-3 flex items-stretch gap-3">
               <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="면담 내용을 입력하세요." rows={4} className="ui-field min-w-[240px] flex-1 resize-y" />
