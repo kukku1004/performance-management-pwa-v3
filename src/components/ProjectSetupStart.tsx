@@ -27,6 +27,16 @@ function mergeNames(current: string[], additions: string[]) {
   return [...current, ...additions.filter((name) => !existing.has(normalizedName(name)))]
 }
 
+function StartModeIcon({ mode }: { mode: StartMode }) {
+  if (mode === 'excel') {
+    return <svg className="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 2.75h8l4 4V21.25H6z" /><path d="M14 2.75v4h4" /></svg>
+  }
+  if (mode === 'direct') {
+    return <svg className="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6a2.1 2.1 0 0 0-3-3L5.2 16z" /><path d="m14.5 6.7 2.8 2.8" /></svg>
+  }
+  return <svg className="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.3-5.8" /><path d="M3.5 4.5v5h5" /><path d="M12 7.5V12l3 1.8" /></svg>
+}
+
 export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartProps) {
   const { state, dispatch } = useAppState()
   const { workspace, activeProject, activeTeam } = useWorkspace()
@@ -193,10 +203,12 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
           <button type="button" onClick={onClose} className="ui-button ui-button-ghost ui-button-sm" aria-label="빠른 시작 닫기">×</button>
         </div>
 
-        <div className="mt-5 grid shrink-0 gap-2 sm:grid-cols-3" role="tablist" aria-label="빠른 시작 방식">
-          {([['direct', '직접 입력', '선택한 영역에 이름을 빠르게 등록'], ['excel', 'Excel로 시작', '통합 양식으로 내려받고 일괄 등록'], ['previous', '이전 평가 가져오기', '팀과 평가기간을 골라 선택 복사']] as const).map(([value, label, description]) => (
-            <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => { setMode(value); setMessage('') }} className={`rounded-lg border p-4 text-left transition-colors ${mode === value ? 'border-accent bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`}>
-              <span className="block text-sm font-semibold text-gray-950">{label}</span><span className="mt-1 block text-xs text-gray-500">{description}</span>
+        <div className="mt-5 grid shrink-0 gap-2" role="tablist" aria-label="빠른 시작 방식">
+          {([['excel', 'Excel로 한 번에 시작', '과제·팀원 통합 양식을 받아서 채운 뒤 업로드하면 한 번에 등록됩니다.'], ['direct', '직접 입력', '과제와 팀원을 이름부터 빠르게 등록합니다.'], ['previous', '이전 평가에서 가져오기', '다른 팀·평가기간의 과제와 팀원을 선택해 이어받습니다.']] as const).map(([value, label, description]) => (
+            <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => { setMode(value); setMessage('') }} className={`group flex min-h-[72px] items-center gap-4 rounded-xl border px-4 py-3 text-left transition-colors ${mode === value ? 'border-accent bg-orange-50/50' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}`}>
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${mode === value ? 'bg-orange-100 text-accent' : 'bg-gray-50 text-gray-500 group-hover:text-gray-700'}`}><span className="h-6 w-6"><StartModeIcon mode={value} /></span></span>
+              <span className="min-w-0"><span className="block text-sm font-semibold text-gray-950">{label}</span><span className="mt-1 block text-sm leading-5 text-gray-500">{description}</span></span>
+              {mode === value && <span className="ml-auto shrink-0 text-xs font-semibold text-accent">선택됨</span>}
             </button>
           ))}
         </div>
