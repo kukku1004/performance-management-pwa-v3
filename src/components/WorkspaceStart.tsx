@@ -35,6 +35,7 @@ export default function WorkspaceStart() {
   const [copyTasks, setCopyTasks] = useState(true)
   const [copyCriteria, setCopyCriteria] = useState(true)
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
+  const [sourceProjectId, setSourceProjectId] = useState('')
   const [editingProject, setEditingProject] = useState<EvaluationProject | null>(null)
   const [deletingProject, setDeletingProject] = useState<EvaluationProject | null>(null)
 
@@ -45,7 +46,8 @@ export default function WorkspaceStart() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   ])), [workspace.projects, workspace.teams])
 
-  const sourceProject = projectTeam ? projectsByTeam.get(projectTeam.id)?.[0] : undefined
+  const availableSourceProjects = projectTeam ? projectsByTeam.get(projectTeam.id) ?? [] : []
+  const sourceProject = availableSourceProjects.find((project) => project.id === sourceProjectId)
 
   async function handleConnect() {
     setBusy(true)
@@ -81,6 +83,7 @@ export default function WorkspaceStart() {
     setCopyTasks(Boolean(source))
     setCopyCriteria(Boolean(source))
     setSelectedTaskIds(source?.appState.tasks.map((task) => task.id) ?? [])
+    setSourceProjectId(source?.id ?? '')
   }
 
   function handleCreateTeam() {
@@ -144,6 +147,16 @@ export default function WorkspaceStart() {
     setPeriodValue(project.period.value)
     setStartDate(project.period.startDate ?? '')
     setEndDate(project.period.endDate ?? '')
+    setSourceProjectId('')
+  }
+
+  function changeSourceProject(nextId: string) {
+    const next = availableSourceProjects.find((project) => project.id === nextId)
+    setSourceProjectId(nextId)
+    setCopyMembers(Boolean(next))
+    setCopyTasks(Boolean(next))
+    setCopyCriteria(Boolean(next))
+    setSelectedTaskIds(next?.appState.tasks.map((task) => task.id) ?? [])
   }
 
   if (!connected) {
@@ -198,7 +211,7 @@ export default function WorkspaceStart() {
 
       {projectTeam && <div className="ui-modal-backdrop" role="dialog" aria-modal="true"><div className="ui-modal-panel max-w-xl"><div className="flex items-start justify-between"><div><h2 className="ui-modal-title">{editingProject ? '평가 프로젝트 수정' : '새 평가 프로젝트'}</h2><p className="mt-1 text-sm text-gray-500">{projectTeam.name}</p></div><button type="button" onClick={() => { setProjectTeam(null); setEditingProject(null) }} className="ui-button ui-button-ghost ui-button-sm">닫기</button></div>
         <div className="mt-6 grid grid-cols-[120px_minmax(0,1fr)_auto] items-end gap-3"><div><label className="ui-label" htmlFor="project-year">연도</label><select id="project-year" value={year} onChange={(event) => setYear(Number(event.target.value))} className="ui-field">{Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 2 + index).map((item) => <option key={item}>{item}</option>)}</select></div><div><label className="ui-label" htmlFor="project-period">기간</label>{periodType === 'custom' ? <div className="flex gap-2"><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="ui-field" /><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="ui-field" /></div> : <select id="project-period" value={periodValue} onChange={(event) => setPeriodValue(event.target.value)} className="ui-field">{getPeriodOptions(periodType).map((item) => <option key={item}>{item}</option>)}</select>}</div><div className="relative"><button type="button" aria-label="평가주기 설정" onClick={() => setShowPeriodOptions((value) => !value)} className="ui-button ui-button-secondary px-3">설정</button>{showPeriodOptions && <div className="absolute right-0 top-11 z-10 w-40 rounded-md border border-gray-200 bg-white p-1 shadow-sm">{(Object.keys(PERIOD_LABELS) as EvaluationPeriodType[]).map((type) => <button key={type} type="button" onClick={() => changePeriodType(type)} className={`block w-full rounded px-3 py-2 text-left text-sm ${periodType === type ? 'bg-orange-50 text-accent' : 'hover:bg-gray-50'}`}>{PERIOD_LABELS[type]}</button>)}</div>}</div></div>
-        {sourceProject && <section className="mt-6 border-t border-gray-200 pt-5"><h3 className="ui-section-title">이전 평가기간의 데이터를 가져오시겠습니까?</h3><p className="ui-section-description">{formatEvaluationPeriod(sourceProject.period)}의 기본정보만 가져옵니다.</p><label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={copyMembers} onChange={(event) => setCopyMembers(event.target.checked)} /> 팀원 가져오기</label><label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={copyCriteria} onChange={(event) => setCopyCriteria(event.target.checked)} /> 평가기준 가져오기</label><label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={copyTasks} onChange={(event) => setCopyTasks(event.target.checked)} /> 기존 과제에서 선택</label>{copyTasks && <div className="mt-3 max-h-40 overflow-y-auto border-y border-gray-200">{sourceProject.appState.tasks.map((task) => <label key={task.id} className="flex items-center gap-2 border-b border-gray-100 px-3 py-2.5 text-sm last:border-0"><input type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={(event) => setSelectedTaskIds((ids) => event.target.checked ? [...ids, task.id] : ids.filter((id) => id !== task.id))} />{task.name}</label>)}</div>}</section>}
+        {!editingProject && availableSourceProjects.length > 0 && <section className="mt-6 border-t border-gray-200 pt-5"><h3 className="ui-section-title">이전 평가기간의 데이터를 가져오시겠습니까?</h3><div className="mt-3 flex flex-wrap items-end gap-3"><label className="min-w-[220px] flex-1"><span className="ui-label">가져올 평가기간</span><select value={sourceProjectId} onChange={(event) => changeSourceProject(event.target.value)} className="ui-field mt-1"><option value="">가져오지 않음</option>{availableSourceProjects.map((project) => <option key={project.id} value={project.id}>{formatEvaluationPeriod(project.period)}</option>)}</select></label></div>{sourceProject ? <><p className="ui-section-description">{formatEvaluationPeriod(sourceProject.period)}의 기본정보만 가져옵니다.</p><label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={copyMembers} onChange={(event) => setCopyMembers(event.target.checked)} /> 팀원 가져오기</label><label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={copyCriteria} onChange={(event) => setCopyCriteria(event.target.checked)} /> 평가기준 가져오기</label><label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={copyTasks} onChange={(event) => setCopyTasks(event.target.checked)} /> 기존 과제에서 선택</label>{copyTasks && <div className="mt-3 max-h-40 overflow-y-auto border-y border-gray-200">{sourceProject.appState.tasks.map((task) => <label key={task.id} className="flex items-center gap-2 border-b border-gray-100 px-3 py-2.5 text-sm last:border-0"><input type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={(event) => setSelectedTaskIds((ids) => event.target.checked ? [...ids, task.id] : ids.filter((id) => id !== task.id))} />{task.name}</label>)}</div>}</> : <p className="mt-3 text-sm text-gray-500">빈 평가 프로젝트로 시작합니다.</p>}</section>}
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}<div className="ui-modal-actions"><button type="button" onClick={() => { setProjectTeam(null); setEditingProject(null) }} className="ui-button ui-button-ghost">취소</button><button type="button" onClick={handleCreateProject} className="ui-button ui-button-primary">{editingProject ? '변경사항 저장' : '평가 프로젝트 만들기'}</button></div>
       </div></div>}
       <ConfirmDialog open={deletingProject !== null} title="평가 프로젝트 삭제" message={`${deletingProject ? formatEvaluationPeriod(deletingProject.period) : ''} 프로젝트를 삭제하면 과제, 기여도, 수행평가, 평가결과, 피어리뷰를 포함한 해당 평가기간 데이터가 모두 삭제되며 복구할 수 없습니다. 필요한 데이터는 먼저 백업하세요. 프로젝트를 삭제하시겠습니까?`} confirmLabel="프로젝트 삭제" onConfirm={() => { if (deletingProject) deleteProject(deletingProject.id); setDeletingProject(null) }} onCancel={() => setDeletingProject(null)} />
