@@ -12,6 +12,7 @@ import { getMemberEvaluationHistory, getRecentMemberPerformance } from '../utils
 import { parseGrowthHistoryWorkbook } from '../utils/growthExcel'
 import ExpandCollapseIcon from './ExpandCollapseIcon'
 import DisclosureIcon from './DisclosureIcon'
+import MeetingNotesFocusPreview from './MeetingNotesFocusPreview'
 
 function todayString() {
   return new Date().toISOString().slice(0, 10)
@@ -59,6 +60,7 @@ export default function MeetingNotes() {
   const [meetingPanelMinimized, setMeetingPanelMinimized] = useState(false)
   const [growthPanelsMinimized, setGrowthPanelsMinimized] = useState(false)
   const [, setGrowthExpanded] = useState(true)
+  const [comparisonView, setComparisonView] = useState<'current' | 'improved'>('current')
 
   function startResize(side: 'left' | 'right', event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
@@ -171,6 +173,24 @@ export default function MeetingNotes() {
         </p>
       ) : (
         <div className="-mt-5 overflow-hidden bg-white">
+          {comparisonView === 'improved' && selectedMember ? <MeetingNotesFocusPreview
+            members={members}
+            selectedMember={selectedMember}
+            selectedMemberId={selectedMemberId}
+            onSelectMember={setSelectedMemberId}
+            notes={notesForMember}
+            insights={meetingInsights}
+            newDate={newDate}
+            newComment={newComment}
+            newMood={newMood}
+            onDateChange={setNewDate}
+            onCommentChange={setNewComment}
+            onMoodChange={setNewMood}
+            onAdd={handleAdd}
+            onEdit={startEdit}
+            onDelete={setDeletingNote}
+            getMemberGrade={(memberId) => getMemberTabStatus(memberId).grade}
+          /> : <>
           <div className="flex h-12 items-end border-b border-gray-200 bg-white px-1"><div className="flex min-w-0 flex-1 items-end gap-1" role="tablist" aria-label="면담 팀원 선택">
               {members.map((member) => (
                 <button
@@ -242,8 +262,14 @@ export default function MeetingNotes() {
             <MeetingCalendar notes={meetingNotes} members={members} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
           </div>
           </div>
+          </>}
         </div>
       )}
+
+      <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 rounded-full border border-gray-200 bg-white p-1 shadow-sm" role="group" aria-label="면담 화면 비교">
+        <button type="button" onClick={() => setComparisonView('current')} className={`h-8 rounded-full px-4 text-xs font-semibold transition ${comparisonView === 'current' ? 'bg-gray-950 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-950'}`}>현재 버전</button>
+        <button type="button" onClick={() => setComparisonView('improved')} className={`h-8 rounded-full px-4 text-xs font-semibold transition ${comparisonView === 'improved' ? 'bg-gray-950 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-950'}`}>개선 버전</button>
+      </div>
 
       <ConfirmDialog
         open={deletingNote !== null}

@@ -18,6 +18,75 @@
 .meeting-responsive-history { grid-area: history; }
 .meeting-responsive-growth { grid-area: growth; }
 
+.meeting-focus-shell {
+  min-height: calc(100vh - 10rem);
+  background: #fff;
+}
+
+.meeting-focus-members {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 8px 12px 0;
+}
+
+.meeting-focus-member-tab {
+  display: inline-flex;
+  min-width: 112px;
+  max-width: 180px;
+  flex: 1 1 144px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #e5e7eb;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #f9fafb;
+  padding: 10px 12px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.meeting-focus-member-tab-active { background: #111827; color: #fff; border-color: #111827; }
+
+.meeting-focus-workspace {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(480px, 820px);
+  justify-content: center;
+  min-height: calc(100vh - 13rem);
+}
+
+.meeting-focus-workspace-reference { grid-template-columns: minmax(180px, 220px) minmax(440px, 720px) minmax(300px, 420px); }
+.meeting-focus-timeline { border-right: 1px solid #e5e7eb; padding: 28px 20px; }
+.meeting-focus-document { min-width: 0; padding: 28px 36px 96px; }
+.meeting-focus-reference { min-width: 0; overflow-y: auto; border-left: 1px solid #e5e7eb; background: #f9fafb; padding: 28px 20px 96px; }
+
+@media (max-width: 1100px) {
+  .meeting-focus-workspace,
+  .meeting-focus-workspace-reference { grid-template-columns: 180px minmax(0, 1fr); }
+  .meeting-focus-reference { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #e5e7eb; }
+}
+
+@media (max-width: 720px) {
+  .meeting-focus-workspace,
+  .meeting-focus-workspace-reference { display: block; }
+  .meeting-focus-timeline { border-right: 0; border-bottom: 1px solid #e5e7eb; padding: 20px 16px; }
+  .meeting-focus-document,
+  .meeting-focus-reference { padding: 20px 16px 88px; }
+}
+
+@media print {
+  .meeting-focus-members,
+  .meeting-focus-timeline,
+  .meeting-focus-reference,
+  [aria-label="면담 화면 비교"] { display: none !important; }
+  .meeting-focus-workspace { display: block; }
+  .meeting-focus-document { padding: 0; }
+}
+
 @container (min-width: 940px) {
   .meeting-responsive-wide {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
