@@ -345,17 +345,18 @@ function normalizedLabel(value: unknown) {
 
 function applyPeerReviewSheetLayout(ws: XLSX.WorkSheet, participantCount: number, includeGrade: boolean) {
   const lastColumn = includeGrade ? 'D' : 'C'
-  const lastRow = 4 + participantCount
+  const totalRow = 4 + participantCount
+  const lastDataRow = totalRow - 1
   ws['!cols'] = includeGrade
     ? [{ wch: 22 }, { wch: 14 }, { wch: 13 }, { wch: 54 }]
     : [{ wch: 22 }, { wch: 14 }, { wch: 54 }]
-  ws['!rows'] = [{ hpt: 30 }, { hpt: 22 }, { hidden: true }, { hpt: 26 }, ...Array.from({ length: participantCount }, () => ({ hpt: 30 })), { hpt: 24 }]
+  ws['!rows'] = [{ hpt: 30 }, { hpt: 22 }, { hpt: 26 }, ...Array.from({ length: participantCount }, () => ({ hpt: 30 })), { hpt: 24 }]
   ws['!merges'] = [XLSX.utils.decode_range(`A1:${lastColumn}1`), XLSX.utils.decode_range(`A2:${lastColumn}2`)]
-  ws['!autofilter'] = { ref: `A4:${lastColumn}${lastRow}` }
-  ;(ws as XLSX.WorkSheet & { '!freeze'?: unknown })['!freeze'] = { xSplit: 1, ySplit: 4, topLeftCell: 'B5', activePane: 'bottomRight', state: 'frozen' }
+  ws['!autofilter'] = { ref: `A3:${lastColumn}${lastDataRow}` }
+  ;(ws as XLSX.WorkSheet & { '!freeze'?: unknown })['!freeze'] = { xSplit: 1, ySplit: 3, topLeftCell: 'B4', activePane: 'bottomRight', state: 'frozen' }
   ;(ws as XLSX.WorkSheet & { '!dataValidation'?: unknown[] })['!dataValidation'] = [
-    { sqref: `B5:B${lastRow}`, type: 'whole', operator: 'between', formula1: '0', formula2: '100', allowBlank: true },
-    ...(includeGrade ? [{ sqref: `C5:C${lastRow}`, type: 'list', formula1: '"S,A,B,C,D"', allowBlank: true }] : []),
+    { sqref: `B4:B${lastDataRow}`, type: 'whole', operator: 'between', formula1: '0', formula2: '100', allowBlank: true },
+    ...(includeGrade ? [{ sqref: `C4:C${lastDataRow}`, type: 'list', formula1: '"S,A,B,C,D"', allowBlank: true }] : []),
   ]
   const style = (cellAddress: string, fill: string, color: string, bold = false) => {
     const cell = ws[cellAddress]
@@ -363,16 +364,16 @@ function applyPeerReviewSheetLayout(ws: XLSX.WorkSheet, participantCount: number
     cell.s = { fill: { fgColor: { rgb: fill } }, font: { name: 'Arial', sz: 10, color: { rgb: color }, bold }, alignment: { vertical: 'center', wrapText: true } }
   }
   for (let column = 0; column < (includeGrade ? 4 : 3); column += 1) {
-    style(XLSX.utils.encode_cell({ r: 3, c: column }), 'F3F4F6', '111827', true)
+    style(XLSX.utils.encode_cell({ r: 2, c: column }), 'F3F4F6', '111827', true)
   }
-  for (let row = 4; row < lastRow; row += 1) {
+  for (let row = 3; row < totalRow - 1; row += 1) {
     style(XLSX.utils.encode_cell({ r: row, c: 1 }), 'FFF7ED', '111827')
     if (includeGrade) style(XLSX.utils.encode_cell({ r: row, c: 2 }), 'FFF7ED', '111827')
   }
 }
 
 export async function downloadMemberPeerReviewTemplates({
-  projectId, periodLabel, periodFileName, tasks, members, contributions, includeGrade,
+  projectId: _projectId, periodLabel, periodFileName, tasks, members, contributions, includeGrade,
 }: {
   projectId: string
   periodLabel: string
@@ -397,14 +398,14 @@ export async function downloadMemberPeerReviewTemplates({
       ['1', '과제별 시트의 연한 입력 칸에 기여도와 수행등급을 입력합니다.'],
       ['2', '기여도는 과제별 참여자 합계가 100이 되도록 입력합니다.'],
       ['3', '근거에는 관찰한 행동이나 결과를 짧고 구체적으로 작성합니다.'],
-      ['4', '시트명과 숨겨진 ID 행은 변경하지 않고 완성한 파일을 업로드합니다.'],
+      ['4', '시트명과 팀원 이름은 변경하지 않고 완성한 파일을 업로드합니다.'],
     ])
     guide['!cols'] = [{ wch: 14 }, { wch: 68 }]
     guide['!rows'] = [{ hpt: 32 }, { hpt: 24 }, { hpt: 24 }, { hpt: 10 }, { hpt: 26 }, { hpt: 28 }, { hpt: 28 }, { hpt: 28 }, { hpt: 28 }]
     guide['!merges'] = [XLSX.utils.decode_range('A1:B1')]
     XLSX.utils.book_append_sheet(wb, guide, '안내')
     const meta = XLSX.utils.aoa_to_sheet([
-      ['구분', '값'], ['평가프로젝트ID', projectId], ['평가기간', periodLabel], ['평가자ID', reviewer.id], ['평가자', reviewer.name], ['양식버전', 3],
+      ['구분', '값'], ['평가기간', periodLabel], ['평가자', reviewer.name], ['양식버전', 4],
     ])
     XLSX.utils.book_append_sheet(wb, meta, '_메타')
     reviewerTasks.forEach((task, taskIndex) => {
@@ -413,7 +414,6 @@ export async function downloadMemberPeerReviewTemplates({
       const rows: unknown[][] = [
         [`과제: ${task.name}`],
         [`평가기간: ${periodLabel}`],
-        [`과제ID: ${task.id}`],
         headers,
         ...participants.map((member) => includeGrade
           ? [`${member.name}${member.id === reviewer.id ? ' (본인)' : ''}`, '', '', '']
@@ -422,8 +422,8 @@ export async function downloadMemberPeerReviewTemplates({
         includeGrade ? ['기여도 합계', '', '검증', ''] : ['기여도 합계', '', ''],
       ]
       const ws = XLSX.utils.aoa_to_sheet(rows)
-      const totalRow = 5 + participants.length
-      ws[`B${totalRow}`] = { t: 'n', f: `SUM(B5:B${totalRow - 1})` }
+      const totalRow = 4 + participants.length
+      ws[`B${totalRow}`] = { t: 'n', f: `SUM(B4:B${totalRow - 1})` }
       ws[`${includeGrade ? 'D' : 'C'}${totalRow}`] = { t: 's', f: `IF(B${totalRow}=100,"정상","100% 확인")` }
       applyPeerReviewSheetLayout(ws, participants.length, includeGrade)
       XLSX.utils.book_append_sheet(wb, ws, safeSheetName(task.name, taskIndex))
@@ -446,7 +446,7 @@ export interface ProjectPeerReviewImportResult {
 
 export function parseProjectPeerReviewWorkbook(
   buffer: ArrayBuffer,
-  expectedProjectId: string,
+  _expectedProjectId: string,
   tasks: Task[],
   members: TeamMember[],
   contributions: Contribution[],
@@ -457,14 +457,12 @@ export function parseProjectPeerReviewWorkbook(
   const metaSheet = wb.Sheets._메타
   const metaRows = metaSheet ? XLSX.utils.sheet_to_json<(string | number)[]>(metaSheet, { header: 1, defval: '' }) : []
   const meta = new Map(metaRows.map((row) => [String(row[0]), String(row[1])]))
-  const suppliedReviewerId = meta.get('평가자ID') || null
   const reviewerName = normalizedLabel(meta.get('평가자'))
   const errors: string[] = []
   const periodMatches = !expectedPeriodLabel || normalizedLabel(meta.get('평가기간')) === normalizedLabel(expectedPeriodLabel)
-  const contextMatches = meta.get('평가프로젝트ID') === expectedProjectId || periodMatches
+  const contextMatches = periodMatches
   if (!contextMatches) errors.push('현재 평가기간과 일치하지 않는 파일입니다.')
-  const reviewer = members.find((member) => member.id === suppliedReviewerId)
-    ?? members.find((member) => normalizedLabel(member.name) === reviewerName)
+  const reviewer = members.find((member) => normalizedLabel(member.name) === reviewerName)
   const reviewerMemberId = reviewer?.id ?? null
   if (!reviewer) errors.push('평가자 정보를 확인할 수 없습니다.')
   if (!contextMatches || !reviewer) return { reviews: [], reviewerMemberId, reviewerName, errors }
@@ -473,23 +471,21 @@ export function parseProjectPeerReviewWorkbook(
   for (const sheetName of wb.SheetNames.filter((name) => name !== '_메타' && name !== '안내')) {
     const ws = wb.Sheets[sheetName]
     const rows = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, defval: '' })
-    const suppliedTaskId = normalizedLabel(rows[2]?.[0]).replace(/^과제ID:\s*/, '')
     const taskName = normalizedLabel(rows[0]?.[0]).replace(/^과제:\s*/, '')
-    const task = tasks.find((item) => item.id === suppliedTaskId)
-      ?? tasks.find((item) => normalizedLabel(item.name) === taskName)
+    const task = tasks.find((item) => normalizedLabel(item.name) === taskName)
     if (!task) { errors.push(`${sheetName}: 과제를 찾을 수 없습니다.`); continue }
     const participants = new Set(peerReviewParticipants(task.id, members, contributions).map((member) => member.id))
-    for (const [rowIndex, row] of rows.slice(4).entries()) {
+    for (const [rowIndex, row] of rows.slice(3).entries()) {
       const targetLabel = normalizedLabel(row[0])
       if (!targetLabel || targetLabel === '기여도 합계') continue
       const target = memberByLabel.get(targetLabel)
-      if (!target) { errors.push(`${sheetName} ${rowIndex + 5}행: 평가 대상이 일치하지 않습니다.`); continue }
-      if (!participants.has(target.id)) { errors.push(`${sheetName} ${rowIndex + 5}행: 해당 과제 참여자가 아닙니다.`); continue }
+      if (!target) { errors.push(`${sheetName} ${rowIndex + 4}행: 평가 대상이 일치하지 않습니다.`); continue }
+      if (!participants.has(target.id)) { errors.push(`${sheetName} ${rowIndex + 4}행: 해당 과제 참여자가 아닙니다.`); continue }
       const contribution = row[1] === '' ? null : Number(row[1])
       const gradeCell = includeGrade ? String(row[2] ?? '').toUpperCase() : ''
       const evidence = String(row[includeGrade ? 3 : 2] ?? '').trim()
-      if (contribution !== null && (!Number.isFinite(contribution) || contribution < 0 || contribution > 100)) { errors.push(`${sheetName} ${rowIndex + 5}행: 기여도는 0~100 숫자여야 합니다.`); continue }
-      if (includeGrade && gradeCell && !PERFORMANCE_GRADE_OPTIONS.includes(gradeCell as PerformanceGrade)) { errors.push(`${sheetName} ${rowIndex + 5}행: 수행등급을 확인해주세요.`); continue }
+      if (contribution !== null && (!Number.isFinite(contribution) || contribution < 0 || contribution > 100)) { errors.push(`${sheetName} ${rowIndex + 4}행: 기여도는 0~100 숫자여야 합니다.`); continue }
+      if (includeGrade && gradeCell && !PERFORMANCE_GRADE_OPTIONS.includes(gradeCell as PerformanceGrade)) { errors.push(`${sheetName} ${rowIndex + 4}행: 수행등급을 확인해주세요.`); continue }
       reviews.push({ id: uuidv4(), taskId: task.id, reviewerMemberId: reviewerMemberId ?? '', reviewerName: reviewer?.name ?? reviewerName, targetMemberId: target.id, contributionPercent: contribution, grade: gradeCell ? gradeCell as PerformanceGrade : null, evidence })
     }
   }
