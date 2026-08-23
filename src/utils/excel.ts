@@ -165,6 +165,25 @@ export async function downloadTaskTemplate() {
   await downloadWorkbook(wb, '과제_업로드_양식.xlsx')
 }
 
+export async function downloadQuickStartTemplate() {
+  const taskSheet = XLSX.utils.aoa_to_sheet([
+    [...TASK_HEADERS],
+    ['신규 랜딩페이지 제작', '핵심', '대', '전환율 15% 개선', '', ''],
+    ['내부 협업툴 정비', '일반', '소', '', '', ''],
+  ])
+  taskSheet['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 28 }, { wch: 28 }, { wch: 10 }]
+  const memberSheet = XLSX.utils.aoa_to_sheet([
+    [...MEMBER_HEADERS],
+    ['김민준', '팀장', '과장', 7, '기획', ''],
+    ['이서연', '', '대리', 3, '디자인', ''],
+  ])
+  memberSheet['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 16 }, { wch: 30 }]
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, taskSheet, '과제양식')
+  XLSX.utils.book_append_sheet(workbook, memberSheet, '팀원양식')
+  await downloadWorkbook(workbook, '성과평가_빠른시작_통합양식.xlsx')
+}
+
 export interface TaskImportResult {
   tasks: Task[]
   errors: string[]
@@ -326,6 +345,48 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
   })
 
   return { members: Array.from(byName.values()), errors, importedCount, addedCount, updatedCount, addedIds }
+}
+
+export interface QuickStartImportResult {
+  tasks: Task[]
+  members: TeamMember[]
+  taskCount: number
+  memberCount: number
+  errors: string[]
+}
+
+export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task[], existingMembers: TeamMember[]): QuickStartImportResult {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  let tasks = existingTasks
+  let members = existingMembers
+  let taskCount = 0
+  let memberCount = 0
+  const errors: string[] = []
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName]
+    if (!sheet) return
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', range: 0 })
+    const labels = new Set(rows.slice(0, 8).flat().map((value) => normalizedLabel(value)))
+    const singleSheetWorkbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(singleSheetWorkbook, sheet, sheetName)
+    const singleSheetBuffer = XLSX.write(singleSheetWorkbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
+
+    if (labels.has('과제명') && labels.has('과제등급')) {
+      const result = parseTaskWorkbook(singleSheetBuffer, tasks)
+      tasks = result.tasks
+      taskCount += result.importedCount
+      errors.push(...result.errors.map((error) => `${sheetName}: ${error}`))
+    } else if (labels.has('이름') && (labels.has('직급') || labels.has('직책'))) {
+      const result = parseMemberWorkbook(singleSheetBuffer, members)
+      members = result.members
+      memberCount += result.importedCount
+      errors.push(...result.errors.map((error) => `${sheetName}: ${error}`))
+    }
+  })
+
+  if (taskCount === 0 && memberCount === 0) errors.push('과제 또는 팀원 양식을 찾지 못했습니다.')
+  return { tasks, members, taskCount, memberCount, errors }
 }
 
 // ---------- Peer review template / import ----------
