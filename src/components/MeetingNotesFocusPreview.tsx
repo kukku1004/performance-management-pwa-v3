@@ -109,7 +109,7 @@ export default function MeetingNotesFocusPreview({
       : `${calendarOpen ? Math.max(320, timelineWidth) : timelineWidth}px 6px minmax(440px, ${documentWidth}px) 6px minmax(220px, 1fr)` }}>
       <aside className="meeting-focus-timeline">
         <MeetingCalendar notes={allNotes} members={members} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
-        <div className="mb-3 mt-3 flex items-center gap-1.5 text-gray-700"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.8"><path d="M7 3h10v3H7zM5 6h14v15H5zM8 11h8M8 15h5" /></svg><p className="text-xs font-semibold">팀원 면담</p><span className="text-[10px] text-gray-400">{sortedNotes.length}건</span></div>
+        <div className="mb-3 mt-3 flex items-center gap-1.5 text-gray-700" title={`면담 기록 ${sortedNotes.length}건`} aria-label={`면담 기록 ${sortedNotes.length}건`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg><span className="text-xs font-semibold tabular-nums">{sortedNotes.length}</span></div>
         <div className="meeting-focus-history-rail">
           {sortedNotes.length === 0 ? <p className="py-3 text-xs text-gray-400">기록 없음</p> : sortedNotes.map((note, index) => <button key={note.id} type="button" onClick={() => openMeetingNote(note)} aria-label={`${note.date} 면담일지 불러오기`} className={`meeting-focus-history-mark group ${selectedNoteId === note.id ? 'meeting-focus-history-mark-active' : ''}`}>
             <span className="meeting-focus-history-tick" />
