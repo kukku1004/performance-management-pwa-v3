@@ -8,7 +8,6 @@ import Badge from './Badge'
 import SectionHeader from './SectionHeader'
 import { downloadTaskTemplate, parseTaskWorkbook, type TaskImportResult } from '../utils/excel'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
-import ProjectSetupStart from './ProjectSetupStart'
 
 export default function TaskManagement() {
   const { state, dispatch } = useAppState()
@@ -18,10 +17,6 @@ export default function TaskManagement() {
   const [importResult, setImportResult] = useState<TaskImportResult | null>(null)
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  if (state.tasks.length === 0 || state.members.length === 0) {
-    return <CriteriaWorkspaceLayout><div className="ui-page"><ProjectSetupStart /></div></CriteriaWorkspaceLayout>
-  }
 
   function openAddModal() {
     setEditingTask(null)

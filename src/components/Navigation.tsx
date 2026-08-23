@@ -18,9 +18,10 @@ interface NavigationProps {
   activeTab: TabKey
   onTabChange: (tab: TabKey) => void
   onOpenDataManagement: () => void
+  onOpenQuickStart: () => void
 }
 
-export default function Navigation({ activeTab, onTabChange, onOpenDataManagement }: NavigationProps) {
+export default function Navigation({ activeTab, onTabChange, onOpenDataManagement, onOpenQuickStart }: NavigationProps) {
   const { workspace, activeProject, activeTeam, account, saveStatus, selectProject, logout, switchAccount } = useWorkspace()
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
@@ -35,10 +36,15 @@ export default function Navigation({ activeTab, onTabChange, onOpenDataManagemen
             {projectMenuOpen && <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-2 shadow-lg">{workspace.teams.map((team) => <div key={team.id} className="mb-2 last:mb-0"><p className="px-2 py-1 text-xs font-semibold text-gray-500">{team.name}</p>{workspace.projects.filter((project) => project.teamId === team.id).map((project) => <button key={project.id} type="button" onClick={() => { selectProject(project.id); setProjectMenuOpen(false) }} className={`block w-full rounded-md px-3 py-2 text-left text-sm ${project.id === activeProject?.id ? 'bg-orange-50 font-medium text-accent' : 'hover:bg-gray-50'}`}>{formatEvaluationPeriod(project.period)}</button>)}</div>)}<button type="button" onClick={() => selectProject(null)} className="mt-1 w-full border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-500 hover:text-gray-900">프로젝트 관리</button></div>}
           </div>
           <div className="border-l border-gray-200 pl-3">
-            <button type="button" onClick={onOpenDataManagement} className="ui-button ui-button-ghost ui-button-sm whitespace-nowrap">
-              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
-              데이터 관리
-            </button>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={onOpenDataManagement} className="ui-button ui-button-ghost ui-button-sm whitespace-nowrap">
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>
+                데이터 관리
+              </button>
+              <button type="button" onClick={onOpenQuickStart} className="ui-button ui-button-ghost ui-button-sm px-2" aria-label="빠른 시작" title="빠른 시작">
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m13 2-9 12h8l-1 8 9-12h-8z"/></svg>
+              </button>
+            </div>
           </div>
           <nav className="flex min-w-0 items-center gap-1">
             {TABS.map((tab) => (

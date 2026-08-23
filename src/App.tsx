@@ -9,6 +9,7 @@ import EvaluationResults from './components/EvaluationResults'
 import MeetingNotes from './components/MeetingNotes'
 import WorkspaceStart from './components/WorkspaceStart'
 import GoogleDriveDialog from './components/GoogleDriveDialog'
+import ProjectSetupStart from './components/ProjectSetupStart'
 import { evaluationPeriodFolderName, formatEvaluationPeriod } from './utils/workspace'
 import { CriteriaWorkspaceProvider } from './components/CriteriaWorkspaceLayout'
 
@@ -36,6 +37,7 @@ function ProjectApp() {
   const { activeProject, activeTeam, resetWorkspace } = useWorkspace()
   const [activeTab, setActiveTab] = useState<TabKey>('tasks')
   const [dataManagementOpen, setDataManagementOpen] = useState(false)
+  const [quickStartOpen, setQuickStartOpen] = useState(() => state.tasks.length === 0 && state.members.length === 0)
   const [periodName, setPeriodName] = useState(activeProject ? evaluationPeriodFolderName(activeProject.period) : String(new Date().getFullYear()))
 
   function handleTabChange(tab: TabKey) {
@@ -45,7 +47,7 @@ function ProjectApp() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navigation activeTab={activeTab} onTabChange={handleTabChange} onOpenDataManagement={() => setDataManagementOpen(true)} />
+      <Navigation activeTab={activeTab} onTabChange={handleTabChange} onOpenDataManagement={() => setDataManagementOpen(true)} onOpenQuickStart={() => setQuickStartOpen(true)} />
       <CriteriaWorkspaceProvider><main className="mx-auto w-full max-w-[1920px] px-4 py-8 sm:px-6">
         {activeTab === 'tasks' && <TaskManagement />}
         {activeTab === 'members' && <TeamManagement />}
@@ -54,6 +56,7 @@ function ProjectApp() {
         {activeTab === 'notes' && <MeetingNotes />}
       </main></CriteriaWorkspaceProvider>
       <GoogleDriveDialog open={dataManagementOpen} state={state} periodName={periodName} onPeriodNameChange={setPeriodName} onRestore={(restoredState) => dispatch({ type: 'LOAD_STATE', payload: restoredState })} onResetWorkspace={resetWorkspace} teamName={activeTeam?.name} projectId={activeProject?.id ?? ''} periodLabel={activeProject ? formatEvaluationPeriod(activeProject.period) : periodName} onClose={() => setDataManagementOpen(false)} />
+      <ProjectSetupStart open={quickStartOpen} onClose={() => setQuickStartOpen(false)} />
     </div>
   )
 }
