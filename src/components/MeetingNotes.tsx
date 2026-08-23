@@ -179,6 +179,7 @@ export default function MeetingNotes() {
             selectedMemberId={selectedMemberId}
             onSelectMember={setSelectedMemberId}
             notes={notesForMember}
+            allNotes={meetingNotes}
             insights={meetingInsights}
             newDate={newDate}
             newComment={newComment}

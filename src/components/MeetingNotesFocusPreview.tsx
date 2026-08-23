@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { MeetingNote, TeamMember } from '../types'
 import Badge from './Badge'
 import DisclosureIcon from './DisclosureIcon'
 import MemberGrowthOverview from './MemberGrowthOverview'
 import RecentPerformanceSummary from './RecentPerformanceSummary'
-
-type ReferencePanel = 'performance' | 'growth' | null
+import MeetingCalendar from './MeetingCalendar'
+import { useWorkspace } from '../state/WorkspaceContext'
+import { getRecentMemberPerformance } from '../utils/growth'
 
 interface MeetingNotesFocusPreviewProps {
   members: TeamMember[]
@@ -13,6 +14,7 @@ interface MeetingNotesFocusPreviewProps {
   selectedMemberId: string
   onSelectMember: (memberId: string) => void
   notes: MeetingNote[]
+  allNotes: MeetingNote[]
   insights: string[]
   newDate: string
   newComment: string
@@ -29,16 +31,42 @@ interface MeetingNotesFocusPreviewProps {
 const MOODS = ['😄', '😊', '🙂', '😐', '🙁', '😢', '😣', '😩', '😭']
 
 export default function MeetingNotesFocusPreview({
-  members, selectedMember, selectedMemberId, onSelectMember, notes, insights,
+  members, selectedMember, selectedMemberId, onSelectMember, notes, allNotes, insights,
   newDate, newComment, newMood, onDateChange, onCommentChange, onMoodChange,
   onAdd, onEdit, onDelete, getMemberGrade,
 }: MeetingNotesFocusPreviewProps) {
-  const [referencePanel, setReferencePanel] = useState<ReferencePanel>(null)
+  const { workspace, activeTeam } = useWorkspace()
   const [insightsOpen, setInsightsOpen] = useState(true)
   const [historyOpen, setHistoryOpen] = useState(true)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(notes[0]?.id ?? null)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const layoutRef = useRef<HTMLDivElement>(null)
+  const [timelineWidth, setTimelineWidth] = useState(190)
+  const [documentWidth, setDocumentWidth] = useState(700)
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
   const selectedNote = sortedNotes.find((note) => note.id === selectedNoteId) ?? null
+  const latestPerformance = activeTeam ? getRecentMemberPerformance(workspace, activeTeam.id, selectedMemberId) : null
+
+  function startResize(side: 'timeline' | 'document', event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    const startX = event.clientX
+    const startTimeline = timelineWidth
+    const startDocument = documentWidth
+    const available = layoutRef.current?.clientWidth ?? 1440
+    function move(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX
+      if (side === 'timeline') {
+        const next = Math.max(92, Math.min(360, startTimeline + delta))
+        setTimelineWidth(next)
+        setDocumentWidth(Math.max(440, Math.min(900, startDocument - (next - startTimeline))))
+      } else {
+        setDocumentWidth(Math.max(440, Math.min(Math.max(440, available - timelineWidth - 220), startDocument + delta)))
+      }
+    }
+    function up() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
 
   return <div className="meeting-focus-shell">
     <div className="meeting-focus-members" role="tablist" aria-label="면담 팀원 선택">
@@ -48,8 +76,9 @@ export default function MeetingNotesFocusPreview({
       </button>)}
     </div>
 
-    <div className={`meeting-focus-workspace ${referencePanel ? 'meeting-focus-workspace-reference' : ''}`}>
+    <div ref={layoutRef} className="meeting-focus-workspace" style={{ gridTemplateColumns: `${calendarOpen ? Math.max(320, timelineWidth) : timelineWidth}px 6px minmax(440px, ${documentWidth}px) 6px minmax(220px, 1fr)` }}>
       <aside className="meeting-focus-timeline">
+        <MeetingCalendar notes={allNotes} members={members} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
         <div className="mb-5">
           <p className="text-xs font-medium text-gray-400">면담 이력</p>
           <h2 className="mt-1 text-lg font-semibold text-gray-950">{selectedMember.name}</h2>
@@ -65,13 +94,11 @@ export default function MeetingNotesFocusPreview({
         </div>
       </aside>
 
+      <button type="button" aria-label="면담 히스토리와 면담일지 영역 너비 조절" onPointerDown={(event) => startResize('timeline', event)} className="meeting-focus-splitter"><span /></button>
+
       <main className="meeting-focus-document">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 pb-4">
-          <div><p className="text-xs font-medium text-gray-400">면담 관리</p><h2 className="mt-1 text-xl font-semibold text-gray-950">{selectedMember.name} 면담</h2></div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setReferencePanel(referencePanel === 'performance' ? null : 'performance')} className={`ui-button ui-button-secondary ui-button-sm ${referencePanel === 'performance' ? 'border-gray-950 bg-gray-950 text-white' : ''}`}>성과 상세</button>
-            <button type="button" onClick={() => setReferencePanel(referencePanel === 'growth' ? null : 'growth')} className={`ui-button ui-button-secondary ui-button-sm ${referencePanel === 'growth' ? 'border-gray-950 bg-gray-950 text-white' : ''}`}>성장 시뮬레이션</button>
-          </div>
+          <div><p className="text-xs font-medium text-gray-400">면담 관리</p><h2 className="mt-1 text-xl font-semibold text-gray-950">{selectedMember.name} <span className="ml-1 text-sm font-normal text-gray-500">{selectedMember.role} · {selectedMember.level}</span></h2><div className="mt-3 flex flex-wrap items-center gap-2"><Badge tone="neutral">{latestPerformance?.latest.label ?? '평가 이력 없음'}</Badge>{latestPerformance && <><strong className="text-sm">{latestPerformance.latest.grade}</strong><span className="text-sm tabular-nums text-gray-600">{latestPerformance.latest.score.toFixed(1)}점</span></>}</div></div>
         </header>
 
         {insights.length > 0 && <section className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4">
@@ -92,11 +119,8 @@ export default function MeetingNotesFocusPreview({
 
         {selectedNote && <section className="mt-8 border-t border-gray-200 pt-5 print:block"><p className="text-xs font-medium text-gray-400">선택한 면담 상세</p><div className="mt-2 flex items-center gap-2"><strong>{selectedNote.date}</strong>{selectedNote.mood && <span>{selectedNote.mood}</span>}</div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">{selectedNote.comment}</p></section>}
       </main>
-
-      {referencePanel && <aside className="meeting-focus-reference">
-        <div className="flex items-center justify-between border-b border-gray-200 pb-3"><h3 className="ui-section-title">{referencePanel === 'performance' ? '성과 상세' : '성장 시뮬레이션'}</h3><button type="button" onClick={() => setReferencePanel(null)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" aria-label="참고 패널 닫기">×</button></div>
-        <div className="mt-4">{referencePanel === 'performance' ? <RecentPerformanceSummary member={selectedMember} /> : <MemberGrowthOverview member={selectedMember} compact collapsible />}</div>
-      </aside>}
+      <button type="button" aria-label="면담일지와 성과·성장 영역 너비 조절" onPointerDown={(event) => startResize('document', event)} className="meeting-focus-splitter"><span /></button>
+      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
   </div>
 }
