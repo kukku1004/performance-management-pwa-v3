@@ -48,7 +48,6 @@ export default function MeetingNotesFocusPreview({
   const [timelineWidth, setTimelineWidth] = useState(92)
   const [documentWidth, setDocumentWidth] = useState(700)
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
-  const selectedNote = sortedNotes.find((note) => note.id === selectedNoteId) ?? null
   const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId) ?? getDefaultGrowthProfile(selectedMemberId)
   const evaluationHistory = activeTeam ? getMemberEvaluationHistory(workspace, activeTeam.id, selectedMemberId) : []
   const currentSimulation = calculatePromotionSimulation(evaluationHistory, { ...storedProfile, performanceHistory: [] }, selectedMember.level)
@@ -67,6 +66,13 @@ export default function MeetingNotesFocusPreview({
     savePersonalNotes([...personalNotes, { id: `${Date.now()}-${Math.random()}`, content, color: 'gray', starred: false }])
     setNoteInput('')
     setNoteAdding(false)
+  }
+
+  function openMeetingNote(note: MeetingNote) {
+    setSelectedNoteId(note.id)
+    onDateChange(note.date)
+    onCommentChange(note.comment)
+    onMoodChange(note.mood ?? '')
   }
 
   function startResize(side: 'timeline' | 'document', event: React.PointerEvent<HTMLButtonElement>) {
@@ -103,12 +109,11 @@ export default function MeetingNotesFocusPreview({
       : `${calendarOpen ? Math.max(320, timelineWidth) : timelineWidth}px 6px minmax(440px, ${documentWidth}px) 6px minmax(220px, 1fr)` }}>
       <aside className="meeting-focus-timeline">
         <MeetingCalendar notes={allNotes} members={members} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
-        <div className="mb-4 mt-3 flex items-center justify-between"><p className="text-xs font-semibold text-gray-600">면담 히스토리</p><span className="text-[10px] text-gray-400">{sortedNotes.length}건</span></div>
+        <div className="mb-3 mt-3 flex items-center gap-1.5 text-gray-700"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.8"><path d="M7 3h10v3H7zM5 6h14v15H5zM8 11h8M8 15h5" /></svg><p className="text-xs font-semibold">팀원 면담</p><span className="text-[10px] text-gray-400">{sortedNotes.length}건</span></div>
         <div className="meeting-focus-history-rail">
-          {sortedNotes.length === 0 ? <p className="py-3 pl-5 text-xs text-gray-400">기록 없음</p> : sortedNotes.map((note, index) => <button key={note.id} type="button" onClick={() => setSelectedNoteId(note.id)} aria-label={`${note.date} 면담 상세보기`} className={`meeting-focus-history-mark group ${selectedNoteId === note.id ? 'meeting-focus-history-mark-active' : ''}`}>
+          {sortedNotes.length === 0 ? <p className="py-3 text-xs text-gray-400">기록 없음</p> : sortedNotes.map((note, index) => <button key={note.id} type="button" onClick={() => openMeetingNote(note)} aria-label={`${note.date} 면담일지 불러오기`} className={`meeting-focus-history-mark group ${selectedNoteId === note.id ? 'meeting-focus-history-mark-active' : ''}`}>
             <span className="meeting-focus-history-tick" />
-            <span className="meeting-focus-history-date">{note.date.slice(5).replace('-', '/')}</span>
-            <span className="meeting-focus-history-tooltip"><span className="flex items-center justify-between gap-3"><strong>{note.date}</strong>{note.mood && <span>{note.mood}</span>}</span><span className="mt-1 block line-clamp-2 font-normal text-gray-500">{note.comment}</span><span className="mt-2 block text-[10px] font-semibold text-orange-600">클릭하여 상세보기</span>{index === 0 && <Badge tone="neutral" className="mt-2">최근 면담</Badge>}</span>
+            <span className="meeting-focus-history-tooltip"><span className="flex items-center justify-between gap-3"><strong>{note.date}</strong>{note.mood && <span>{note.mood}</span>}</span><span className="mt-1 block line-clamp-2 font-normal text-gray-500">{note.comment}</span><span className="mt-2 block text-[10px] font-semibold text-orange-600">클릭하여 면담일지에 불러오기</span>{index === 0 && <Badge tone="neutral" className="mt-2">최근 면담</Badge>}</span>
           </button>)}
         </div>
       </aside>
@@ -149,7 +154,6 @@ export default function MeetingNotesFocusPreview({
           {historyOpen && <div className="divide-y divide-gray-100">{sortedNotes.map((note) => <article key={note.id} className="py-4"><div className="flex items-start justify-between gap-3"><div><strong className="text-sm text-gray-950">{note.mood && <span className="mr-2">{note.mood}</span>}{note.date}</strong><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">{note.comment}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => onEdit(note)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="수정" aria-label={`${note.date} 면담 수정`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" /></svg></button><button type="button" onClick={() => onDelete(note)} className="ui-button ui-button-danger ui-button-sm h-8 w-8 px-0" title="삭제" aria-label={`${note.date} 면담 삭제`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" /></svg></button><button type="button" onClick={() => window.print()} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="출력" aria-label={`${note.date} 면담 출력`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M7 9V4h10v5M7 17H5V9h14v8h-2M7 14h10v6H7z" /></svg></button></div></div></article>)}</div>}
         </section>
 
-        {selectedNote && <section className="mt-8 border-t border-gray-200 pt-5 print:block"><p className="text-xs font-medium text-gray-400">선택한 면담 상세</p><div className="mt-2 flex items-center gap-2"><strong>{selectedNote.date}</strong>{selectedNote.mood && <span>{selectedNote.mood}</span>}</div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">{selectedNote.comment}</p></section>}
         </div>
         </div>
       </main>
