@@ -14,17 +14,42 @@ const PERIOD_LABELS: Record<EvaluationPeriodType, string> = {
 }
 
 const MEMBER_COLORS = [
-  'bg-orange-500',
-  'bg-sky-500',
-  'bg-emerald-500',
-  'bg-violet-500',
-  'bg-rose-500',
+  'bg-orange-100 text-orange-700',
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-violet-100 text-violet-700',
+  'bg-pink-100 text-pink-700',
 ]
 
 function ProjectCard({ project, onOpen, onEdit, onDelete }: { project: EvaluationProject; onOpen: () => void; onEdit: () => void; onDelete: () => void }) {
   const members = project.appState.members.slice(0, 5)
   const remaining = project.appState.members.length - members.length
-  return <article className="group overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:border-gray-300 hover:shadow-sm"><button type="button" onClick={onOpen} className="block w-full px-4 pb-3 pt-4 text-left"><div className="flex items-start justify-between gap-3"><div><h4 className="text-base font-semibold text-gray-950">{formatEvaluationPeriod(project.period)}</h4><p className="mt-1 text-xs text-gray-500">최근 수정 {new Date(project.updatedAt).toLocaleDateString('ko-KR')}</p></div><span className="text-xs text-gray-400">팀원 {project.appState.members.length}명</span></div><div className="mt-4 flex min-h-9 items-center gap-1.5">{members.length > 0 ? <>{members.map((member, index) => <span key={member.id} title={`${member.name} · ${member.level || '직급 미설정'}`} className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold text-white shadow-sm ${MEMBER_COLORS[index % MEMBER_COLORS.length]}`}>{member.name.slice(0, 2)}</span>)}{remaining > 0 && <span className="ml-1 text-xs font-medium text-gray-500">+{remaining}</span>}</> : <span className="text-sm text-gray-400">등록된 팀원 없음</span>}</div></button><div className="flex items-center justify-between border-t border-gray-100 px-4 py-2"><span className="text-xs text-gray-400">프로젝트 열기</span><div className="flex gap-1"><button type="button" onClick={onEdit} className="ui-button ui-button-ghost ui-button-sm">수정</button><button type="button" onClick={onDelete} className="ui-button ui-button-ghost ui-button-sm text-danger">삭제</button></div></div></article>
+  return (
+    <article className="group flex w-full max-w-[300px] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.02)] transition hover:border-slate-200 hover:shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+      <button type="button" onClick={onOpen} className="block w-full flex-1 p-6 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="text-lg font-bold text-slate-950">{formatEvaluationPeriod(project.period)}</h4>
+            <p className="mt-1.5 text-xs text-slate-400">최근 수정 {new Date(project.updatedAt).toLocaleDateString('ko-KR')}</p>
+          </div>
+          <Badge tone="neutral" className="shrink-0 border-0 bg-slate-100 text-[11px] text-slate-600">팀원 {project.appState.members.length}명</Badge>
+        </div>
+        <div className="mt-5 flex min-h-8 items-center gap-1.5">
+          {members.length > 0 ? <>
+            {members.map((member, index) => <span key={member.id} title={`${member.name} · ${member.level || '직급 미설정'}`} className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${MEMBER_COLORS[index % MEMBER_COLORS.length]}`}>{member.name.slice(0, 2)}</span>)}
+            {remaining > 0 && <span className="ml-1 text-xs font-medium text-slate-500">+{remaining}</span>}
+          </> : <span className="text-sm text-slate-400">등록된 팀원 없음</span>}
+        </div>
+      </button>
+      <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/40 px-6 py-4">
+        <button type="button" onClick={onOpen} className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:opacity-75">프로젝트 열기 <span aria-hidden="true">›</span></button>
+        <div className="flex items-center gap-4 text-xs font-medium">
+          <button type="button" onClick={onEdit} className="text-slate-600 hover:text-slate-950">수정</button>
+          <button type="button" onClick={onDelete} className="text-danger hover:opacity-75">삭제</button>
+        </div>
+      </div>
+    </article>
+  )
 }
 
 export default function WorkspaceStart() {
@@ -215,23 +240,33 @@ export default function WorkspaceStart() {
           <div className="flex items-center gap-2"><button type="button" onClick={() => void handleSwitchAccount()} disabled={busy} className="ui-button ui-button-secondary ui-button-sm">+ 다른 계정</button><button type="button" onClick={() => void logout()} className="ui-button ui-button-ghost ui-button-sm">로그아웃</button></div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="ui-section-header border-b border-gray-200 pb-4">
-          <div><h2 className="ui-section-title">팀과 평가 프로젝트</h2><p className="ui-section-description">진행할 팀과 평가기간을 선택하세요.</p></div>
-          <div className="flex items-center gap-2"><button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-secondary">+ 새 팀</button></div>
-        </div>
+      <main className="mx-auto max-w-[1440px] px-6 py-10 lg:px-10 xl:px-12">
+        <p className="text-sm text-slate-600">진행할 팀과 평가기간을 선택하세요.</p>
 
         {workspace.teams.length === 0 ? (
           <div className="ui-empty mt-8"><p>첫 팀을 만들어 성과관리를 시작하세요.</p><button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-primary mt-4">+ 팀 만들기</button></div>
         ) : selectedTeam ? (
           <>
-            <div className="mt-5 flex gap-2 overflow-x-auto border-b border-gray-200 pb-0" role="tablist" aria-label="팀 선택">
-              {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${active ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-950'}`}>{team.name}<span className="ml-2 text-xs font-medium text-gray-400">{count}개</span></button> })}
+            <div className="mt-8 flex items-center justify-between gap-6 overflow-hidden border-b border-slate-200 pb-8">
+              <div className="flex min-w-0 gap-4 overflow-x-auto" role="tablist" aria-label="팀 선택">
+                {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 rounded-full border-2 px-4 py-3 text-sm font-semibold transition ${active ? 'border-accent text-accent' : 'border-slate-400 text-slate-700 hover:border-slate-600'}`}>{team.name}<span className="ml-1.5 font-medium opacity-75">{team.members.length}명 · {count}개</span></button> })}
+              </div>
+              <button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-secondary shrink-0">+ 새 팀</button>
             </div>
             {(() => {
               const projects = projectsByTeam.get(selectedTeam.id) ?? []
               const usesQuarterlyGrid = projects.some((project) => project.period.type === 'quarter')
-              return <section className="py-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold text-gray-950">{selectedTeam.name}</h3><p className="mt-1 text-xs text-gray-500">평가 프로젝트 {projects.length}개</p></div><div className="flex items-center gap-1"><button type="button" onClick={() => openEditTeam(selectedTeam)} className="ui-button ui-button-ghost ui-button-sm">팀명 수정</button><button type="button" onClick={() => setDeletingTeam(selectedTeam)} className="ui-button ui-button-ghost ui-button-sm text-danger">팀 삭제</button><button type="button" onClick={() => openProject(selectedTeam)} className="ui-button ui-button-primary ui-button-sm">+ 새 평가 프로젝트</button></div></div>{projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className={`mt-5 grid gap-3 sm:grid-cols-2 ${usesQuarterlyGrid ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}</section>
+              return <section className="py-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                    <h3 className="text-xl font-bold text-slate-950">{selectedTeam.name}</h3>
+                    <span className="pb-0.5 text-xs text-slate-600">평가 프로젝트 {projects.length}개</span>
+                    <span className="flex items-center gap-1 pb-0.5 text-xs"><button type="button" onClick={() => openEditTeam(selectedTeam)} className="text-slate-500 hover:text-slate-950">팀명 수정</button><span className="text-slate-300">·</span><button type="button" onClick={() => setDeletingTeam(selectedTeam)} className="text-danger hover:opacity-75">팀 삭제</button></span>
+                  </div>
+                  <button type="button" onClick={() => openProject(selectedTeam)} className="ui-button ui-button-primary ui-button-sm">+ 새 평가 만들기</button>
+                </div>
+                {projects.length === 0 ? <p className="ui-empty mt-6">아직 평가 프로젝트가 없습니다.</p> : <div className={`mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 ${usesQuarterlyGrid ? 'xl:grid-cols-4' : 'xl:grid-cols-2'}`}>{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}
+              </section>
             })()}
           </>
         ) : null}
