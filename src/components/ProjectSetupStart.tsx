@@ -5,6 +5,7 @@ import { useWorkspace } from '../state/WorkspaceContext'
 import type { Task, TeamMember } from '../types'
 import { downloadQuickStartTemplate, parseQuickStartWorkbook } from '../utils/excel'
 import { formatEvaluationPeriod } from '../utils/workspace'
+import FileDropZone from './FileDropZone'
 
 type StartMode = 'direct' | 'excel' | 'previous'
 type DirectTarget = 'tasks' | 'members'
@@ -229,17 +230,12 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
               <div><h3 className="ui-section-title">통합 Excel</h3><p className="mt-1 text-sm text-gray-500">과제와 팀원을 한 통합 양식으로 관리합니다. 기존 과제·팀원 양식도 함께 올릴 수 있습니다.</p></div>
               <button type="button" onClick={() => { void downloadQuickStartTemplate() }} className="ui-button ui-button-secondary shrink-0">통합 양식 다운로드</button>
             </div>
-            <button
-              type="button"
+            <FileDropZone
+              className="mt-5"
               onClick={() => excelInputRef.current?.click()}
-              onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' }}
               onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
-              className="mt-5 flex min-h-64 w-full flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-8 text-center transition-colors hover:border-accent hover:bg-orange-50/30"
-            >
-              <span className="text-sm font-semibold text-gray-900">Excel 파일을 여기에 드래그</span>
-              <span className="mt-2 text-sm text-gray-500">통합 양식 또는 기존 과제·팀원 파일을 여러 개 동시에 올릴 수 있습니다.</span>
-              <span className="ui-button ui-button-primary mt-5">파일 선택</span>
-            </button>
+              description="통합 양식 또는 기존 과제·팀원 파일 여러 개 업로드 가능 (.xlsx)"
+            />
             <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
           </section>}
 

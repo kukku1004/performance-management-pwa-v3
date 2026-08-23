@@ -13,6 +13,7 @@ import {
   type SavedDriveBackup,
 } from '../utils/googleDrive'
 import Badge from './Badge'
+import FileDropZone from './FileDropZone'
 import { downloadFullBackup, downloadFullBackupJson, parseFullBackupJson } from '../utils/fullBackup'
 import { detectManagedWorkbookKind, parseMemberWorkbook, parseProjectPeerReviewWorkbook, parseTaskWorkbook } from '../utils/excel'
 import { syncAutoDistribution } from '../state/appReducer'
@@ -241,7 +242,12 @@ export default function GoogleDriveDialog({
               <div><h4 className="ui-section-title">Excel 일괄 업로드</h4><p className="ui-section-description">과제·팀원·피어리뷰 파일을 함께 선택하면 양식 종류를 자동 구분합니다.</p></div>
               <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { void handleBulkExcelUpload(event.target.files); event.target.value = '' }} />
               <button type="button" onClick={() => excelInputRef.current?.click()} disabled={busy} className="ui-button ui-button-primary">전체 일괄 업로드</button>
-              <div onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void handleBulkExcelUpload(event.dataTransfer.files) }} className="flex min-h-28 items-center justify-center rounded-md border border-dashed border-gray-300 px-5 text-center text-sm text-gray-500">여러 Excel 파일을 여기에 드래그하거나<br />전체 일괄 업로드를 선택하세요.</div>
+              <FileDropZone
+                onClick={() => excelInputRef.current?.click()}
+                onDrop={(event) => { event.preventDefault(); void handleBulkExcelUpload(event.dataTransfer.files) }}
+                disabled={busy}
+                description="여러 파일 동시 업로드 가능 (.xlsx)"
+              />
               <div className="border-t border-gray-200 pt-4"><h4 className="ui-section-title">JSON 백업 복원</h4><p className="ui-section-description">앱에서 내려받은 JSON으로 현재 프로젝트를 정확히 복원합니다.</p></div>
               <input ref={restoreInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => { void handleLocalRestore(event.target.files?.[0]); event.target.value = '' }} />
               <button type="button" onClick={() => restoreInputRef.current?.click()} disabled={busy} className="ui-button ui-button-secondary">JSON 백업 선택</button>
