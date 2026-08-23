@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { EvaluationPeriodType, EvaluationProject, Team } from '../types'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { formatEvaluationPeriod, getPeriodOptions } from '../utils/workspace'
@@ -15,7 +15,9 @@ const PERIOD_LABELS: Record<EvaluationPeriodType, string> = {
 }
 
 function ProjectCard({ project, onOpen, onEdit, onDelete }: { project: EvaluationProject; onOpen: () => void; onEdit: () => void; onDelete: () => void }) {
-  return <article className="group overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-sm"><button type="button" onClick={onOpen} className="block w-full text-left"><div className="flex h-32 items-center justify-center bg-gray-50"><div className="flex h-16 w-16 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-8 w-8 fill-none stroke-accent" strokeWidth="1.6"><path d="M3.5 7h6l2 2h9v9.5h-17z"/><path d="M3.5 8.5v-3h6l2 2"/></svg></div></div><div className="px-5 pb-3 pt-4"><h4 className="text-base font-semibold text-gray-950">{formatEvaluationPeriod(project.period)}</h4><p className="mt-1 truncate text-sm text-gray-500">성과평가 프로젝트 · 최근 수정 {new Date(project.updatedAt).toLocaleDateString('ko-KR')}</p></div></button><div className="flex items-center justify-between border-t border-gray-100 px-4 py-2"><span className="text-xs text-gray-400">프로젝트 열기</span><div className="flex gap-1"><button type="button" onClick={onEdit} className="ui-button ui-button-ghost ui-button-sm">수정</button><button type="button" onClick={onDelete} className="ui-button ui-button-ghost ui-button-sm text-danger">삭제</button></div></div></article>
+  const members = project.appState.members.slice(0, 3)
+  const remaining = project.appState.members.length - members.length
+  return <article className="group overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:border-gray-300 hover:shadow-sm"><button type="button" onClick={onOpen} className="block w-full px-4 pb-3 pt-4 text-left"><div className="flex items-start justify-between gap-3"><div><h4 className="text-base font-semibold text-gray-950">{formatEvaluationPeriod(project.period)}</h4><p className="mt-1 text-xs text-gray-500">최근 수정 {new Date(project.updatedAt).toLocaleDateString('ko-KR')}</p></div><span className="text-xs text-gray-400">프로젝트</span></div><div className="mt-4 min-h-6 text-sm text-gray-600">{members.length > 0 ? <span>{members.map((member) => member.name).join(' · ')}{remaining > 0 ? ` 외 ${remaining}명` : ''}</span> : <span className="text-gray-400">등록된 팀원 없음</span>}</div></button><div className="flex items-center justify-between border-t border-gray-100 px-4 py-2"><span className="text-xs text-gray-400">프로젝트 열기</span><div className="flex gap-1"><button type="button" onClick={onEdit} className="ui-button ui-button-ghost ui-button-sm">수정</button><button type="button" onClick={onDelete} className="ui-button ui-button-ghost ui-button-sm text-danger">삭제</button></div></div></article>
 }
 
 export default function WorkspaceStart() {
@@ -38,6 +40,7 @@ export default function WorkspaceStart() {
   const [sourceProjectId, setSourceProjectId] = useState('')
   const [editingProject, setEditingProject] = useState<EvaluationProject | null>(null)
   const [deletingProject, setDeletingProject] = useState<EvaluationProject | null>(null)
+  const [selectedTeamId, setSelectedTeamId] = useState('')
 
   const projectsByTeam = useMemo(() => new Map(workspace.teams.map((team) => [
     team.id,
@@ -48,6 +51,11 @@ export default function WorkspaceStart() {
 
   const availableSourceProjects = projectTeam ? projectsByTeam.get(projectTeam.id) ?? [] : []
   const sourceProject = availableSourceProjects.find((project) => project.id === sourceProjectId)
+  const selectedTeam = workspace.teams.find((team) => team.id === selectedTeamId) ?? workspace.teams[0]
+
+  useEffect(() => {
+    if (!workspace.teams.some((team) => team.id === selectedTeamId)) setSelectedTeamId(workspace.teams[0]?.id ?? '')
+  }, [selectedTeamId, workspace.teams])
 
   async function handleConnect() {
     setBusy(true)
@@ -194,17 +202,14 @@ export default function WorkspaceStart() {
 
         {workspace.teams.length === 0 ? (
           <div className="ui-empty mt-8"><p>첫 팀을 만들어 성과관리를 시작하세요.</p><button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-primary mt-4">+ 팀 만들기</button></div>
-        ) : (
-          <div className="divide-y divide-gray-200 border-b border-gray-200">
-            {workspace.teams.map((team) => {
-              const projects = projectsByTeam.get(team.id) ?? []
-              return <section key={team.id} className="py-7">
-                <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold text-gray-950">{team.name}</h3><p className="mt-1 text-xs text-gray-500">팀원 {team.members.length}명 · 평가 프로젝트 {projects.length}개</p></div><button type="button" onClick={() => openProject(team)} className="ui-button ui-button-secondary ui-button-sm">+ 새 평가 프로젝트</button></div>
-                {projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(team, project)} onDelete={() => setDeletingProject(project)} />)}</div>}
-              </section>
-            })}
-          </div>
-        )}
+        ) : selectedTeam ? (
+          <>
+            <div className="mt-5 flex gap-2 overflow-x-auto border-b border-gray-200 pb-0" role="tablist" aria-label="팀 선택">
+              {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${active ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-950'}`}>{team.name}<span className="ml-2 text-xs font-medium text-gray-400">{team.members.length}명 · {count}개</span></button> })}
+            </div>
+            {(() => { const projects = projectsByTeam.get(selectedTeam.id) ?? []; return <section className="py-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold text-gray-950">{selectedTeam.name}</h3><p className="mt-1 text-xs text-gray-500">팀원 {selectedTeam.members.length}명 · 평가 프로젝트 {projects.length}개</p></div><button type="button" onClick={() => openProject(selectedTeam)} className="ui-button ui-button-secondary ui-button-sm">+ 새 평가 프로젝트</button></div>{projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}</section> })()}
+          </>
+        ) : null}
       </main>
 
       {creatingTeam && <div className="ui-modal-backdrop" role="dialog" aria-modal="true"><div className="ui-modal-panel max-w-md"><h2 className="ui-modal-title">새 팀 만들기</h2><label className="ui-label mt-5" htmlFor="new-team-name">팀명</label><input id="new-team-name" autoFocus value={teamName} onChange={(event) => setTeamName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && handleCreateTeam()} placeholder="예: UX디자인팀" className="ui-field" /><div className="ui-modal-actions"><button type="button" onClick={() => setCreatingTeam(false)} className="ui-button ui-button-ghost">취소</button><button type="button" onClick={handleCreateTeam} disabled={!teamName.trim()} className="ui-button ui-button-primary">다음</button></div></div></div>}
