@@ -25,8 +25,8 @@ function ProjectCard({ project, onOpen, onEdit, onDelete }: { project: Evaluatio
   const members = project.appState.members.slice(0, 5)
   const remaining = project.appState.members.length - members.length
   return (
-    <article className="group flex w-full max-w-[300px] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.02)] transition hover:border-slate-200 hover:shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-      <button type="button" onClick={onOpen} className="block w-full flex-1 p-6 text-left">
+    <article className="group flex w-full max-w-[300px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:border-slate-300">
+      <button type="button" onClick={onOpen} className="block w-full flex-1 p-5 text-left">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h4 className="text-lg font-bold text-slate-950">{formatEvaluationPeriod(project.period)}</h4>
@@ -34,14 +34,14 @@ function ProjectCard({ project, onOpen, onEdit, onDelete }: { project: Evaluatio
           </div>
           <Badge tone="neutral" className="shrink-0 border-0 bg-slate-100 text-[11px] text-slate-600">팀원 {project.appState.members.length}명</Badge>
         </div>
-        <div className="mt-5 flex min-h-8 items-center gap-1.5">
+        <div className="mt-4 flex min-h-8 items-center gap-1.5">
           {members.length > 0 ? <>
             {members.map((member, index) => <span key={member.id} title={`${member.name} · ${member.level || '직급 미설정'}`} className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${MEMBER_COLORS[index % MEMBER_COLORS.length]}`}>{member.name.slice(0, 2)}</span>)}
             {remaining > 0 && <span className="ml-1 text-xs font-medium text-slate-500">+{remaining}</span>}
           </> : <span className="text-sm text-slate-400">등록된 팀원 없음</span>}
         </div>
       </button>
-      <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/40 px-6 py-4">
+      <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3.5">
         <button type="button" onClick={onOpen} className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:opacity-75">프로젝트 열기 <span aria-hidden="true">›</span></button>
         <div className="flex items-center gap-4 text-xs font-medium">
           <button type="button" onClick={onEdit} className="text-slate-600 hover:text-slate-950">수정</button>
@@ -235,28 +235,27 @@ export default function WorkspaceStart() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-6 py-4 lg:px-10 xl:px-12">
           <div><h1 className="text-xl font-semibold tracking-tight text-gray-950">성과·성장관리</h1><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500"><Badge tone="success">Google Drive 연결됨</Badge><span>{account?.email || '개인 Google 계정'}</span>{isAdminEmail(account?.email) && <Badge tone="neutral">관리자</Badge>}</div></div>
           <div className="flex items-center gap-2"><button type="button" onClick={() => void handleSwitchAccount()} disabled={busy} className="ui-button ui-button-secondary ui-button-sm">+ 다른 계정</button><button type="button" onClick={() => void logout()} className="ui-button ui-button-ghost ui-button-sm">로그아웃</button></div>
         </div>
       </header>
-      <main className="mx-auto max-w-[1440px] px-6 py-10 lg:px-10 xl:px-12">
+      <main className="mx-auto max-w-[1440px] px-6 py-8 lg:px-10 xl:px-12">
         <p className="text-sm text-slate-600">진행할 팀과 평가기간을 선택하세요.</p>
 
         {workspace.teams.length === 0 ? (
           <div className="ui-empty mt-8"><p>첫 팀을 만들어 성과관리를 시작하세요.</p><button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-primary mt-4">+ 팀 만들기</button></div>
         ) : selectedTeam ? (
           <>
-            <div className="mt-8 flex items-center justify-between gap-6 overflow-hidden border-b border-slate-200 pb-8">
+            <div className="mt-5 flex items-center justify-between gap-4 overflow-hidden border-b border-slate-200 pb-5">
               <div className="flex min-w-0 gap-4 overflow-x-auto" role="tablist" aria-label="팀 선택">
-                {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 rounded-full border-2 px-4 py-3 text-sm font-semibold transition ${active ? 'border-accent text-accent' : 'border-slate-400 text-slate-700 hover:border-slate-600'}`}>{team.name}<span className="ml-1.5 font-medium opacity-75">{team.members.length}명 · {count}개</span></button> })}
+                {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${active ? 'border-accent bg-white text-accent' : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'}`}>{team.name}<span className="ml-1.5 font-medium opacity-75">{team.members.length}명 · {count}개</span></button> })}
               </div>
               <button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-secondary shrink-0">+ 새 팀</button>
             </div>
             {(() => {
               const projects = projectsByTeam.get(selectedTeam.id) ?? []
-              const usesQuarterlyGrid = projects.some((project) => project.period.type === 'quarter')
-              return <section className="py-6">
+              return <section className="py-5">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
                     <h3 className="text-xl font-bold text-slate-950">{selectedTeam.name}</h3>
@@ -265,7 +264,7 @@ export default function WorkspaceStart() {
                   </div>
                   <button type="button" onClick={() => openProject(selectedTeam)} className="ui-button ui-button-primary ui-button-sm">+ 새 평가 만들기</button>
                 </div>
-                {projects.length === 0 ? <p className="ui-empty mt-6">아직 평가 프로젝트가 없습니다.</p> : <div className={`mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 ${usesQuarterlyGrid ? 'xl:grid-cols-4' : 'xl:grid-cols-2'}`}>{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}
+                {projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className="mt-5 flex flex-wrap gap-4">{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}
               </section>
             })()}
           </>
