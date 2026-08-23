@@ -6,7 +6,7 @@ import MemberGrowthOverview from './MemberGrowthOverview'
 import RecentPerformanceSummary from './RecentPerformanceSummary'
 import MeetingCalendar from './MeetingCalendar'
 import { useWorkspace } from '../state/WorkspaceContext'
-import { getRecentMemberPerformance } from '../utils/growth'
+import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory, getRecentMemberPerformance } from '../utils/growth'
 
 interface MeetingNotesFocusPreviewProps {
   members: TeamMember[]
@@ -46,6 +46,12 @@ export default function MeetingNotesFocusPreview({
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
   const selectedNote = sortedNotes.find((note) => note.id === selectedNoteId) ?? null
   const latestPerformance = activeTeam ? getRecentMemberPerformance(workspace, activeTeam.id, selectedMemberId) : null
+  const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId) ?? getDefaultGrowthProfile(selectedMemberId)
+  const evaluationHistory = activeTeam ? getMemberEvaluationHistory(workspace, activeTeam.id, selectedMemberId) : []
+  const currentSimulation = calculatePromotionSimulation(evaluationHistory, { ...storedProfile, performanceHistory: [] }, selectedMember.level)
+  const expectedSimulation = calculatePromotionSimulation(evaluationHistory, storedProfile, selectedMember.level)
+  const expectedGap = Math.round((expectedSimulation.currentScore - expectedSimulation.targetScore) * 10) / 10
+  const personalNotes = (storedProfile.personalNotes ?? []).map((note, index) => typeof note === 'string' ? { id: `legacy-${index}`, content: note, color: 'gray' as const } : note)
 
   function startResize(side: 'timeline' | 'document', event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
@@ -76,20 +82,27 @@ export default function MeetingNotesFocusPreview({
       </button>)}
     </div>
 
+    <section className="meeting-focus-summary">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-2"><h2 className="text-2xl font-semibold text-gray-950">{selectedMember.name}</h2><span className="text-sm text-gray-500">{selectedMember.level || '직급 미설정'} · {selectedMember.yearsOfService ?? '-'}년차</span></div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">{personalNotes.map((note) => <span key={note.id} className="inline-flex max-w-52 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"><span className={`h-2 w-2 rounded-full ${note.color === 'orange' ? 'bg-orange-500' : note.color === 'blue' ? 'bg-blue-500' : note.color === 'green' ? 'bg-green-500' : note.color === 'violet' ? 'bg-violet-500' : 'bg-gray-400'}`} /><span className="truncate">{note.content}</span></span>)}{personalNotes.length === 0 && <span className="text-xs text-gray-400">등록된 팀원 메모가 없습니다.</span>}</div>
+      </div>
+      <div className="meeting-focus-score-grid">
+        <div><p>목표 점수</p><strong>{expectedSimulation.targetScore}점</strong></div>
+        <div><p>현재 점수</p><strong>{currentSimulation.currentScore}점</strong></div>
+        <div><p>최종 기대 점수</p><span className="flex flex-wrap items-baseline gap-1.5"><strong>{expectedSimulation.currentScore}점</strong><em className={expectedGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</em></span></div>
+      </div>
+    </section>
+
     <div ref={layoutRef} className="meeting-focus-workspace" style={{ gridTemplateColumns: `${calendarOpen ? Math.max(320, timelineWidth) : timelineWidth}px 6px minmax(440px, ${documentWidth}px) 6px minmax(220px, 1fr)` }}>
       <aside className="meeting-focus-timeline">
         <MeetingCalendar notes={allNotes} members={members} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
-        <div className="mb-5">
-          <p className="text-xs font-medium text-gray-400">면담 이력</p>
-          <h2 className="mt-1 text-lg font-semibold text-gray-950">{selectedMember.name}</h2>
-          <p className="mt-0.5 text-xs text-gray-500">{selectedMember.role} · {selectedMember.level}</p>
-        </div>
-        <div className="relative border-l border-gray-200 pl-5">
-          {sortedNotes.length === 0 ? <p className="py-3 text-sm text-gray-400">아직 면담 기록이 없습니다.</p> : sortedNotes.map((note, index) => <button key={note.id} type="button" onClick={() => setSelectedNoteId(note.id)} className={`relative mb-2 block w-full rounded-md px-3 py-2.5 text-left transition ${selectedNoteId === note.id ? 'bg-gray-950 text-white' : 'hover:bg-gray-50'}`}>
-            <span className={`absolute -left-[25px] top-4 h-2 w-2 rounded-full ring-4 ring-white ${selectedNoteId === note.id ? 'bg-orange-500' : 'bg-gray-300'}`} />
-            <span className="flex items-center justify-between gap-2"><strong className="text-xs">{note.date}</strong>{note.mood && <span>{note.mood}</span>}</span>
-            <span className={`mt-1 block truncate text-xs ${selectedNoteId === note.id ? 'text-gray-300' : 'text-gray-500'}`}>{note.comment}</span>
-            {index === 0 && <span className={`mt-1 block text-[10px] ${selectedNoteId === note.id ? 'text-orange-300' : 'text-orange-600'}`}>최근 면담</span>}
+        <div className="mb-4 mt-3 flex items-center justify-between"><p className="text-xs font-semibold text-gray-600">면담 히스토리</p><span className="text-[10px] text-gray-400">{sortedNotes.length}건</span></div>
+        <div className="meeting-focus-history-rail">
+          {sortedNotes.length === 0 ? <p className="py-3 pl-5 text-xs text-gray-400">기록 없음</p> : sortedNotes.map((note, index) => <button key={note.id} type="button" onClick={() => setSelectedNoteId(note.id)} aria-label={`${note.date} 면담 상세보기`} className={`meeting-focus-history-mark group ${selectedNoteId === note.id ? 'meeting-focus-history-mark-active' : ''}`}>
+            <span className="meeting-focus-history-tick" />
+            <span className="meeting-focus-history-date">{note.date.slice(5).replace('-', '/')}</span>
+            <span className="meeting-focus-history-tooltip"><span className="flex items-center justify-between gap-3"><strong>{note.date}</strong>{note.mood && <span>{note.mood}</span>}</span><span className="mt-1 block line-clamp-2 font-normal text-gray-500">{note.comment}</span><span className="mt-2 block text-[10px] font-semibold text-orange-600">클릭하여 상세보기</span>{index === 0 && <Badge tone="neutral" className="mt-2">최근 면담</Badge>}</span>
           </button>)}
         </div>
       </aside>
@@ -97,9 +110,7 @@ export default function MeetingNotesFocusPreview({
       <button type="button" aria-label="면담 히스토리와 면담일지 영역 너비 조절" onPointerDown={(event) => startResize('timeline', event)} className="meeting-focus-splitter"><span /></button>
 
       <main className="meeting-focus-document">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 pb-4">
-          <div><p className="text-xs font-medium text-gray-400">면담 관리</p><h2 className="mt-1 text-xl font-semibold text-gray-950">{selectedMember.name} <span className="ml-1 text-sm font-normal text-gray-500">{selectedMember.role} · {selectedMember.level}</span></h2><div className="mt-3 flex flex-wrap items-center gap-2"><Badge tone="neutral">{latestPerformance?.latest.label ?? '평가 이력 없음'}</Badge>{latestPerformance && <><strong className="text-sm">{latestPerformance.latest.grade}</strong><span className="text-sm tabular-nums text-gray-600">{latestPerformance.latest.score.toFixed(1)}점</span></>}</div></div>
-        </header>
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-4"><div><p className="text-xs font-medium text-gray-400">면담 관리</p><div className="mt-1 flex items-center gap-2"><Badge tone="neutral">{latestPerformance?.latest.label ?? '평가 이력 없음'}</Badge>{latestPerformance && <><strong className="text-sm">{latestPerformance.latest.grade}</strong><span className="text-sm tabular-nums text-gray-600">{latestPerformance.latest.score.toFixed(1)}점</span></>}</div></div></header>
 
         {insights.length > 0 && <section className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4">
           <button type="button" onClick={() => setInsightsOpen((value) => !value)} className="flex w-full items-center justify-between py-3 text-left"><h3 className="text-sm font-semibold text-amber-950">면담 인사이트</h3><DisclosureIcon open={insightsOpen} className="h-4 w-4 text-amber-700" /></button>

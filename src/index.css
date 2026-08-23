@@ -52,6 +52,33 @@
 
 .meeting-focus-member-tab-active { background: #111827; color: #fff; border-color: #111827; }
 
+.meeting-focus-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 18px 24px;
+}
+
+.meeting-focus-score-grid {
+  display: grid;
+  width: min(100%, 520px);
+  flex-shrink: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.meeting-focus-score-grid > div { min-width: 0; padding: 13px 16px; }
+.meeting-focus-score-grid > div + div { border-left: 1px solid #e5e7eb; }
+.meeting-focus-score-grid p { color: #64748b; font-size: 11px; font-weight: 600; }
+.meeting-focus-score-grid strong { display: block; margin-top: 5px; color: #0f172a; font-size: 20px; font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
+.meeting-focus-score-grid em { font-size: 12px; font-style: normal; font-weight: 700; }
+
 .meeting-focus-workspace {
   display: grid;
   width: 100%;
@@ -77,8 +104,21 @@
 .meeting-focus-splitter span { width: 2px; height: 40px; border-radius: 999px; background: #d1d5db; }
 .meeting-focus-splitter:hover span { background: #fb923c; }
 
+.meeting-focus-history-rail { position: relative; min-height: 360px; border-left: 1px solid #d1d5db; padding: 6px 0 24px; }
+.meeting-focus-history-mark { position: relative; display: flex; width: 100%; align-items: center; gap: 8px; padding: 10px 4px 10px 0; color: #9ca3af; text-align: left; }
+.meeting-focus-history-tick { width: 14px; height: 2px; margin-left: -1px; background: #d1d5db; transition: width 120ms ease, background 120ms ease; }
+.meeting-focus-history-date { font-size: 10px; font-weight: 600; }
+.meeting-focus-history-mark:hover .meeting-focus-history-tick,
+.meeting-focus-history-mark-active .meeting-focus-history-tick { width: 28px; background: #111827; }
+.meeting-focus-history-mark-active { color: #111827; }
+.meeting-focus-history-tooltip { position: absolute; left: 34px; top: 50%; z-index: 30; display: none; width: 230px; transform: translateY(-50%); border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 12px; color: #111827; font-size: 11px; box-shadow: 0 8px 24px rgb(15 23 42 / 10%); }
+.meeting-focus-history-mark:hover .meeting-focus-history-tooltip,
+.meeting-focus-history-mark:focus-visible .meeting-focus-history-tooltip { display: block; }
+
 @media (max-width: 1100px) {
   .meeting-focus-document { padding-inline: 20px; }
+  .meeting-focus-summary { align-items: stretch; }
+  .meeting-focus-score-grid { width: 100%; }
 }
 
 @media (max-width: 760px) {
