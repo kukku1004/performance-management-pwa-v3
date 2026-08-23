@@ -75,7 +75,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
     if (!layout) return
     const rect = layout.getBoundingClientRect()
     function handleMove(moveEvent: PointerEvent) {
-      const simulationWidth = rect.right - moveEvent.clientX
+      const simulationWidth = moveEvent.clientX - rect.left
       if (simulationWidth <= 180) {
         setSimulationPanelMinimized(true)
         return
@@ -104,11 +104,11 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
             <div className="px-3 py-3"><p className="text-[11px] font-medium text-slate-500">최종 기대 점수</p><div className="mt-1 flex flex-wrap items-baseline gap-1.5"><p className="text-lg font-semibold tabular-nums text-slate-950">{simulation.currentScore}점</p><span className={`text-xs font-semibold ${expectedGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</span></div></div>
           </div>
       </div> : null}
-      <div ref={splitLayoutRef} className={`${collapsedContent ? 'grid flex-1 bg-slate-50' : 'bg-white'}`} style={collapsedContent ? { gridTemplateColumns: simulationPanelMinimized ? 'minmax(0,1fr) 1px 60px' : performancePanelMinimized ? '48px 1px minmax(0,1fr)' : `minmax(0, ${100 - simulationPercent}fr) 10px minmax(0, ${simulationPercent}fr)` } : undefined}>
-        <div ref={panelRef} className={`${collapsedContent ? 'col-start-3 row-start-1' : ''} ${simulationPanelMinimized ? 'bg-white px-1 py-3' : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-5'} ${collapsedContent ? 'px-5' : 'px-0'}`}`}>
+      <div ref={splitLayoutRef} className={`${collapsedContent ? 'grid flex-1 bg-slate-50' : 'bg-white'}`} style={collapsedContent ? { gridTemplateColumns: simulationPanelMinimized ? '60px 1px minmax(0,1fr)' : performancePanelMinimized ? 'minmax(0,1fr) 1px 60px' : `minmax(0, ${simulationPercent}fr) 10px minmax(0, ${100 - simulationPercent}fr)` } : undefined}>
+        <div ref={panelRef} className={`${collapsedContent ? 'col-start-1 row-start-1' : ''} ${simulationPanelMinimized ? 'bg-white px-1 py-3' : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-6'} ${collapsedContent ? 'px-5' : 'px-0'}`}`}>
           {simulationPanelMinimized ? <button type="button" onClick={() => setSimulationPanelMinimized(false)} title="승진 시뮬레이션 영역 복원" aria-label="승진 시뮬레이션 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><ExpandCollapseIcon expanded={false} className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">승진 시뮬레이션</span></button> : <>
           <div className="flex min-h-9 flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-            <span className="text-sm font-semibold text-slate-800">승진 시뮬레이션</span>
+            <h3 className="ui-section-title">승진 시뮬레이션</h3>
             <label><span className="sr-only">승진심사 시기</span><input type="month" value={profile.promotionReviewDate} onChange={(event) => updateProfile({ promotionReviewDate: event.target.value })} className="ui-field ui-field-sm w-36 bg-white" /></label>
             <span className="ml-auto flex items-center gap-1"><button type="button" onClick={() => setCriteriaOpen(true)} className="ui-button ui-button-ghost ui-button-sm">기준 보기</button><button type="button" onClick={() => setSimulationPanelMinimized(true)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="승진 시뮬레이션 영역 최소화" aria-label="승진 시뮬레이션 영역 최소화"><ExpandCollapseIcon expanded /></button></span>
           </div>
@@ -118,7 +118,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
           </>}
         </div>
         {!simulationPanelMinimized && !performancePanelMinimized && collapsedContent ? <button type="button" aria-label="성과와 승진 시뮬레이션 영역 너비 조절" onPointerDown={startSimulationResize} className="group col-start-2 row-start-1 flex min-h-full touch-none cursor-col-resize items-center justify-center border-x border-slate-200 bg-white hover:bg-orange-50"><span className="h-10 w-0.5 rounded-full bg-slate-300 group-hover:bg-orange-400" /></button> : <span className="col-start-2 row-start-1 bg-slate-200" aria-hidden="true" />}
-        {collapsedContent && <div className={`col-start-1 row-start-1 min-w-0 bg-slate-50 ${performancePanelMinimized ? 'px-1 py-3' : `px-5 ${removeTopSpacing ? 'pt-0' : 'pt-5'}`}`}>{performancePanelMinimized ? <button type="button" onClick={() => setPerformancePanelMinimized(false)} title="성과 영역 복원" aria-label="성과 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><ExpandCollapseIcon expanded={false} className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">성과</span></button> : <><div className="mb-3 flex items-center justify-between"><h3 className="ui-section-title">성과</h3><button type="button" onClick={() => setPerformancePanelMinimized(true)} title="성과 영역 최소화" aria-label="성과 영역 최소화" className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0"><ExpandCollapseIcon expanded /></button></div>{collapsedContent}</>}</div>}
+        {collapsedContent && <div className={`col-start-3 row-start-1 min-w-0 bg-slate-50 ${performancePanelMinimized ? 'px-1 py-3' : `px-5 ${removeTopSpacing ? 'pt-0' : 'pt-6'}`}`}>{performancePanelMinimized ? <button type="button" onClick={() => setPerformancePanelMinimized(false)} title="성과 영역 복원" aria-label="성과 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><ExpandCollapseIcon expanded={false} className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">성과</span></button> : <><div className="mb-3 flex items-center justify-between"><h3 className="ui-section-title">성과</h3><button type="button" onClick={() => setPerformancePanelMinimized(true)} title="성과 영역 최소화" aria-label="성과 영역 최소화" className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0"><ExpandCollapseIcon expanded /></button></div>{collapsedContent}</>}</div>}
       </div>
       </section>
     {criteriaOpen && <PromotionCriteriaDialog level={member.level} onClose={() => setCriteriaOpen(false)} />}
