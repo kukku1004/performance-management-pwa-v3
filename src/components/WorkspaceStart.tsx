@@ -28,7 +28,7 @@ function ProjectCard({ project, onOpen, onEdit, onDelete }: { project: Evaluatio
 }
 
 export default function WorkspaceStart() {
-  const { workspace, connected, configured, account, connect, switchAccount, logout, createTeam, createProject, selectProject, updateProjectPeriod, deleteProject } = useWorkspace()
+  const { workspace, connected, configured, account, connect, switchAccount, logout, createTeam, updateTeam, deleteTeam, createProject, selectProject, updateProjectPeriod, deleteProject } = useWorkspace()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [teamName, setTeamName] = useState('')
@@ -48,6 +48,9 @@ export default function WorkspaceStart() {
   const [editingProject, setEditingProject] = useState<EvaluationProject | null>(null)
   const [deletingProject, setDeletingProject] = useState<EvaluationProject | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState('')
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null)
+  const [editingTeamName, setEditingTeamName] = useState('')
+  const [deletingTeam, setDeletingTeam] = useState<Team | null>(null)
 
   const projectsByTeam = useMemo(() => new Map(workspace.teams.map((team) => [
     team.id,
@@ -107,6 +110,18 @@ export default function WorkspaceStart() {
     setTeamName('')
     setCreatingTeam(false)
     openProject(team)
+  }
+
+  function openEditTeam(team: Team) {
+    setEditingTeam(team)
+    setEditingTeamName(team.name)
+  }
+
+  function handleUpdateTeam() {
+    if (!editingTeam || !editingTeamName.trim()) return
+    updateTeam(editingTeam.id, editingTeamName)
+    setEditingTeam(null)
+    setEditingTeamName('')
   }
 
   function changePeriodType(type: EvaluationPeriodType) {
@@ -211,14 +226,20 @@ export default function WorkspaceStart() {
         ) : selectedTeam ? (
           <>
             <div className="mt-5 flex gap-2 overflow-x-auto border-b border-gray-200 pb-0" role="tablist" aria-label="팀 선택">
-              {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${active ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-950'}`}>{team.name}<span className="ml-2 text-xs font-medium text-gray-400">{team.members.length}명 · {count}개</span></button> })}
+              {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${active ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-950'}`}>{team.name}<span className="ml-2 text-xs font-medium text-gray-400">{count}개</span></button> })}
             </div>
-            {(() => { const projects = projectsByTeam.get(selectedTeam.id) ?? []; return <section className="py-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold text-gray-950">{selectedTeam.name}</h3><p className="mt-1 text-xs text-gray-500">팀원 {selectedTeam.members.length}명 · 평가 프로젝트 {projects.length}개</p></div><button type="button" onClick={() => openProject(selectedTeam)} className="ui-button ui-button-secondary ui-button-sm">+ 새 평가 프로젝트</button></div>{projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}</section> })()}
+            {(() => {
+              const projects = projectsByTeam.get(selectedTeam.id) ?? []
+              const usesQuarterlyGrid = projects.some((project) => project.period.type === 'quarter')
+              return <section className="py-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold text-gray-950">{selectedTeam.name}</h3><p className="mt-1 text-xs text-gray-500">평가 프로젝트 {projects.length}개</p></div><div className="flex items-center gap-1"><button type="button" onClick={() => openEditTeam(selectedTeam)} className="ui-button ui-button-ghost ui-button-sm">팀명 수정</button><button type="button" onClick={() => setDeletingTeam(selectedTeam)} className="ui-button ui-button-ghost ui-button-sm text-danger">팀 삭제</button><button type="button" onClick={() => openProject(selectedTeam)} className="ui-button ui-button-primary ui-button-sm">+ 새 평가 프로젝트</button></div></div>{projects.length === 0 ? <p className="ui-empty mt-5">아직 평가 프로젝트가 없습니다.</p> : <div className={`mt-5 grid gap-3 sm:grid-cols-2 ${usesQuarterlyGrid ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>{projects.map((project) => <ProjectCard key={project.id} project={project} onOpen={() => selectProject(project.id)} onEdit={() => openEditProject(selectedTeam, project)} onDelete={() => setDeletingProject(project)} />)}</div>}</section>
+            })()}
           </>
         ) : null}
       </main>
 
       {creatingTeam && <div className="ui-modal-backdrop" role="dialog" aria-modal="true"><div className="ui-modal-panel max-w-md"><h2 className="ui-modal-title">새 팀 만들기</h2><label className="ui-label mt-5" htmlFor="new-team-name">팀명</label><input id="new-team-name" autoFocus value={teamName} onChange={(event) => setTeamName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && handleCreateTeam()} placeholder="예: UX디자인팀" className="ui-field" /><div className="ui-modal-actions"><button type="button" onClick={() => setCreatingTeam(false)} className="ui-button ui-button-ghost">취소</button><button type="button" onClick={handleCreateTeam} disabled={!teamName.trim()} className="ui-button ui-button-primary">다음</button></div></div></div>}
+
+      {editingTeam && <div className="ui-modal-backdrop" role="dialog" aria-modal="true"><div className="ui-modal-panel max-w-md"><h2 className="ui-modal-title">팀명 수정</h2><label className="ui-label mt-5" htmlFor="edit-team-name">팀명</label><input id="edit-team-name" autoFocus value={editingTeamName} onChange={(event) => setEditingTeamName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && handleUpdateTeam()} className="ui-field" /><div className="ui-modal-actions"><button type="button" onClick={() => setEditingTeam(null)} className="ui-button ui-button-ghost">취소</button><button type="button" onClick={handleUpdateTeam} disabled={!editingTeamName.trim()} className="ui-button ui-button-primary">저장</button></div></div></div>}
 
       {projectTeam && <div className="ui-modal-backdrop" role="dialog" aria-modal="true"><div className="ui-modal-panel max-w-xl"><div className="flex items-start justify-between"><div><h2 className="ui-modal-title">{editingProject ? '평가 프로젝트 수정' : '새 평가 프로젝트'}</h2><p className="mt-1 text-sm text-gray-500">{projectTeam.name}</p></div><button type="button" onClick={() => { setProjectTeam(null); setEditingProject(null) }} className="ui-button ui-button-ghost ui-button-sm">닫기</button></div>
         <div className="mt-6 grid grid-cols-[120px_minmax(0,1fr)_auto] items-end gap-3"><div><label className="ui-label" htmlFor="project-year">연도</label><select id="project-year" value={year} onChange={(event) => setYear(Number(event.target.value))} className="ui-field">{Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 2 + index).map((item) => <option key={item}>{item}</option>)}</select></div><div><label className="ui-label" htmlFor="project-period">기간</label>{periodType === 'custom' ? <div className="flex gap-2"><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="ui-field" /><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="ui-field" /></div> : <select id="project-period" value={periodValue} onChange={(event) => setPeriodValue(event.target.value)} className="ui-field">{getPeriodOptions(periodType).map((item) => <option key={item}>{item}</option>)}</select>}</div><div className="relative"><button type="button" aria-label="평가주기 설정" onClick={() => setShowPeriodOptions((value) => !value)} className="ui-button ui-button-secondary px-3">설정</button>{showPeriodOptions && <div className="absolute right-0 top-11 z-10 w-40 rounded-md border border-gray-200 bg-white p-1 shadow-sm">{(Object.keys(PERIOD_LABELS) as EvaluationPeriodType[]).map((type) => <button key={type} type="button" onClick={() => changePeriodType(type)} className={`block w-full rounded px-3 py-2 text-left text-sm ${periodType === type ? 'bg-orange-50 text-accent' : 'hover:bg-gray-50'}`}>{PERIOD_LABELS[type]}</button>)}</div>}</div></div>
@@ -226,6 +247,7 @@ export default function WorkspaceStart() {
         {error && <p className="mt-4 text-sm text-danger">{error}</p>}<div className="ui-modal-actions"><button type="button" onClick={() => { setProjectTeam(null); setEditingProject(null) }} className="ui-button ui-button-ghost">취소</button><button type="button" onClick={handleCreateProject} className="ui-button ui-button-primary">{editingProject ? '변경사항 저장' : '평가 프로젝트 만들기'}</button></div>
       </div></div>}
       <ConfirmDialog open={deletingProject !== null} title="평가 프로젝트 삭제" message={`${deletingProject ? formatEvaluationPeriod(deletingProject.period) : ''} 프로젝트를 삭제하면 과제, 기여도, 수행평가, 평가결과, 피어리뷰를 포함한 해당 평가기간 데이터가 모두 삭제되며 복구할 수 없습니다. 필요한 데이터는 먼저 백업하세요. 프로젝트를 삭제하시겠습니까?`} confirmLabel="프로젝트 삭제" onConfirm={() => { if (deletingProject) deleteProject(deletingProject.id); setDeletingProject(null) }} onCancel={() => setDeletingProject(null)} />
+      <ConfirmDialog open={deletingTeam !== null} title="팀 삭제" message={`${deletingTeam?.name ?? ''} 팀을 삭제하면 이 팀의 모든 평가 프로젝트와 과제, 평가결과, 성장관리 및 면담 데이터가 함께 삭제되며 복구할 수 없습니다. 필요한 데이터는 먼저 백업하세요. 팀을 삭제하시겠습니까?`} confirmLabel="팀 삭제" onConfirm={() => { if (deletingTeam) deleteTeam(deletingTeam.id); setDeletingTeam(null) }} onCancel={() => setDeletingTeam(null)} />
     </div>
   )
 }

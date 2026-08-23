@@ -49,6 +49,8 @@ interface WorkspaceContextValue {
   switchAccount: () => Promise<void>
   logout: () => Promise<void>
   createTeam: (name: string) => Team
+  updateTeam: (teamId: string, name: string) => void
+  deleteTeam: (teamId: string) => void
   createProject: (input: CreateProjectInput) => EvaluationProject
   selectProject: (projectId: string | null) => void
   updateProjectPeriod: (projectId: string, period: EvaluationPeriod) => void
@@ -141,6 +143,29 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setWorkspace((current) => ({ ...current, teams: [...current.teams, team] }))
     markUnsaved()
     return team
+  }, [markUnsaved])
+
+  const updateTeam = useCallback((teamId: string, name: string) => {
+    const trimmedName = name.trim()
+    if (!trimmedName) return
+    setWorkspace((current) => ({
+      ...current,
+      teams: current.teams.map((team) => team.id === teamId ? { ...team, name: trimmedName } : team),
+    }))
+    markUnsaved()
+  }, [markUnsaved])
+
+  const deleteTeam = useCallback((teamId: string) => {
+    setWorkspace((current) => {
+      const projectIds = new Set(current.projects.filter((project) => project.teamId === teamId).map((project) => project.id))
+      return {
+        ...current,
+        teams: current.teams.filter((team) => team.id !== teamId),
+        projects: current.projects.filter((project) => project.teamId !== teamId),
+        activeProjectId: current.activeProjectId && projectIds.has(current.activeProjectId) ? null : current.activeProjectId,
+      }
+    })
+    markUnsaved()
   }, [markUnsaved])
 
   const createProject = useCallback((input: CreateProjectInput) => {
@@ -247,6 +272,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     switchAccount,
     logout,
     createTeam,
+    updateTeam,
+    deleteTeam,
     createProject,
     selectProject,
     updateProjectPeriod,
@@ -256,7 +283,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     saveMeetingNote,
     deleteMeetingNote,
     saveGrowthProfile,
-  }), [account, activeProject, activeTeam, connect, connected, createProject, createTeam, deleteMeetingNote, deleteProject, logout, resetWorkspace, saveGrowthProfile, saveMeetingNote, saveStatus, selectProject, switchAccount, updateProjectPeriod, updateProjectState, workspace])
+  }), [account, activeProject, activeTeam, connect, connected, createProject, createTeam, deleteMeetingNote, deleteProject, deleteTeam, logout, resetWorkspace, saveGrowthProfile, saveMeetingNote, saveStatus, selectProject, switchAccount, updateProjectPeriod, updateProjectState, updateTeam, workspace])
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
