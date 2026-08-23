@@ -3,7 +3,6 @@ import type { EvaluationPeriodType, EvaluationProject, Team } from '../types'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { formatEvaluationPeriod, getPeriodOptions } from '../utils/workspace'
 import Badge from './Badge'
-import VersionComparison from './VersionComparison'
 import ConfirmDialog from './ConfirmDialog'
 import { isAdminEmail } from '../utils/admin'
 
@@ -170,7 +169,6 @@ export default function WorkspaceStart() {
   if (!connected) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <header className="border-b border-gray-200 bg-white px-6 py-3"><div className="mx-auto flex max-w-5xl justify-end"><VersionComparison /></div></header>
         <main className="mx-auto flex min-h-[calc(100vh-61px)] max-w-lg items-center px-6 py-16">
           <section className="w-full border-y border-gray-200 bg-white py-12 text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-gray-950">성과·성장관리</h1>
@@ -191,7 +189,7 @@ export default function WorkspaceStart() {
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
           <div><h1 className="text-xl font-semibold tracking-tight text-gray-950">성과·성장관리</h1><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500"><Badge tone="success">Google Drive 연결됨</Badge><span>{account?.email || '개인 Google 계정'}</span>{isAdminEmail(account?.email) && <Badge tone="neutral">관리자</Badge>}</div></div>
-          <div className="flex items-center gap-2"><VersionComparison /><button type="button" onClick={() => void handleSwitchAccount()} disabled={busy} className="ui-button ui-button-secondary ui-button-sm">+ 다른 계정</button><button type="button" onClick={() => void logout()} className="ui-button ui-button-ghost ui-button-sm">로그아웃</button></div>
+          <div className="flex items-center gap-2"><button type="button" onClick={() => void handleSwitchAccount()} disabled={busy} className="ui-button ui-button-secondary ui-button-sm">+ 다른 계정</button><button type="button" onClick={() => void logout()} className="ui-button ui-button-ghost ui-button-sm">로그아웃</button></div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-6 py-10">

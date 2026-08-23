@@ -1,4 +1,3 @@
-import VersionComparison from './VersionComparison'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import Badge from './Badge'
@@ -58,7 +57,6 @@ export default function Navigation({ activeTab, onTabChange, onOpenDataManagemen
             <button type="button" onClick={() => void logout()} className="ui-button ui-button-ghost ui-button-sm">로그아웃</button>
           </div>
       </div>
-      <VersionComparison className="fixed bottom-3 right-4 z-40 rounded-md border border-gray-200 bg-white/95 p-1 shadow-sm" />
     </header>
   )
 }
