@@ -43,6 +43,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([])
   const [copyCriteria, setCopyCriteria] = useState(true)
+  const [previousImportComplete, setPreviousImportComplete] = useState(false)
   const [message, setMessage] = useState('')
   const nameInputRef = useRef<HTMLInputElement>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
@@ -121,12 +122,15 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
   function selectSourceProject(projectId: string) {
     setSourceProjectId(projectId)
+    setPreviousImportComplete(false)
+    setMessage('')
     const project = sourceProjects.find((item) => item.id === projectId)
     setSelectedTaskIds(project?.appState.tasks.map((task) => task.id) ?? [])
     setSelectedMemberIds(project?.appState.members.map((member) => member.id) ?? [])
   }
 
   function toggleSelected(value: string, selected: string[], setSelected: (next: string[]) => void) {
+    setPreviousImportComplete(false)
     setSelected(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value])
   }
 
@@ -146,7 +150,9 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
     if (copiedTasks.length) dispatch({ type: 'IMPORT_TASKS', payload: [...state.tasks, ...copiedTasks] })
     if (copiedMembers.length) dispatch({ type: 'IMPORT_MEMBERS', payload: [...state.members, ...copiedMembers] })
     if (copyCriteria) dispatch({ type: 'SET_CRITERIA', payload: { ...sourceProject.appState.criteria } })
-    setMessage(`${workspace.teams.find((team) => team.id === sourceProject.teamId)?.name ?? '선택한 팀'} · ${formatEvaluationPeriod(sourceProject.period)}에서 과제 ${copiedTasks.length}개, 팀원 ${copiedMembers.length}명을 가져왔습니다.`)
+    const teamName = workspace.teams.find((team) => team.id === sourceProject.teamId)?.name ?? '선택한 팀'
+    setMessage(`${teamName} · ${formatEvaluationPeriod(sourceProject.period)} 데이터를 가져왔습니다.`)
+    setPreviousImportComplete(true)
   }
 
   function renderDraftPanel(target: DirectTarget, title: string, drafts: string[]) {
@@ -193,7 +199,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
         <div className="flex shrink-0 overflow-x-auto border-b border-gray-200" role="tablist" aria-label="빠른 시작 방식">
           {([['direct', '직접 입력', '선택한 영역에 이름을 빠르게 등록'], ['excel', 'Excel로 시작', '통합 양식으로 내려받고 일괄 등록'], ['previous', '이전 평가 가져오기', '팀과 평가기간을 골라 선택 복사']] as const).map(([value, label, description]) => (
-            <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => { setMode(value); setMessage('') }} className={`min-w-[180px] flex-1 border-b-2 px-0 py-3 text-left transition-colors ${mode === value ? 'border-accent' : 'border-transparent hover:bg-gray-50'}`}>
+            <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => { setMode(value); setMessage(''); setPreviousImportComplete(false) }} className={`min-w-[180px] flex-1 border-b-2 px-0 py-3 text-left transition-colors ${mode === value ? 'border-accent' : 'border-transparent hover:bg-gray-50'}`}>
               <span className={`block text-sm font-semibold ${mode === value ? 'text-accent' : 'text-gray-950'}`}>{label}</span>
               <span className="mt-0.5 block truncate text-xs leading-5 text-gray-400">{description}</span>
             </button>
@@ -260,11 +266,11 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
             {sourceProject && <>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <section className="rounded-lg border border-gray-200 p-4">
-                  <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-gray-900">과제</h4><button type="button" className="ui-button ui-button-ghost ui-button-sm" onClick={() => setSelectedTaskIds(selectedTaskIds.length === sourceProject.appState.tasks.length ? [] : sourceProject.appState.tasks.map((task) => task.id))}>전체 {selectedTaskIds.length === sourceProject.appState.tasks.length ? '해제' : '선택'}</button></div>
+                  <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-gray-900">과제</h4><button type="button" className="ui-button ui-button-ghost ui-button-sm" onClick={() => { setPreviousImportComplete(false); setSelectedTaskIds(selectedTaskIds.length === sourceProject.appState.tasks.length ? [] : sourceProject.appState.tasks.map((task) => task.id)) }}>전체 {selectedTaskIds.length === sourceProject.appState.tasks.length ? '해제' : '선택'}</button></div>
                   <div className="mt-3 space-y-1">{sourceProject.appState.tasks.map((task) => <label key={task.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm hover:bg-gray-50"><input type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={() => toggleSelected(task.id, selectedTaskIds, setSelectedTaskIds)} /> <span>{task.name}</span></label>)}{sourceProject.appState.tasks.length === 0 && <p className="text-sm text-gray-400">등록된 과제가 없습니다.</p>}</div>
                 </section>
                 <section className="rounded-lg border border-gray-200 p-4">
-                  <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-gray-900">팀원</h4><button type="button" className="ui-button ui-button-ghost ui-button-sm" onClick={() => setSelectedMemberIds(selectedMemberIds.length === sourceProject.appState.members.length ? [] : sourceProject.appState.members.map((member) => member.id))}>전체 {selectedMemberIds.length === sourceProject.appState.members.length ? '해제' : '선택'}</button></div>
+                  <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-gray-900">팀원</h4><button type="button" className="ui-button ui-button-ghost ui-button-sm" onClick={() => { setPreviousImportComplete(false); setSelectedMemberIds(selectedMemberIds.length === sourceProject.appState.members.length ? [] : sourceProject.appState.members.map((member) => member.id)) }}>전체 {selectedMemberIds.length === sourceProject.appState.members.length ? '해제' : '선택'}</button></div>
                   <div className="mt-3 space-y-1">{sourceProject.appState.members.map((member) => <label key={member.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm hover:bg-gray-50"><input type="checkbox" checked={selectedMemberIds.includes(member.id)} onChange={() => toggleSelected(member.id, selectedMemberIds, setSelectedMemberIds)} /> <span>{member.name}</span></label>)}{sourceProject.appState.members.length === 0 && <p className="text-sm text-gray-400">등록된 팀원이 없습니다.</p>}</div>
                 </section>
               </div>
@@ -272,8 +278,8 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
           </section>}
         </div>
 
-        {message && <div className="mt-4 shrink-0 border-t border-gray-200 pt-4"><p className="text-sm text-success">{message}</p></div>}
-        {mode === 'previous' && sourceProject && <div className="mt-4 flex shrink-0 items-center justify-between gap-4 border-t border-gray-200 pt-4"><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={copyCriteria} onChange={(event) => setCopyCriteria(event.target.checked)} /> 평가기준도 가져오기</label><button type="button" onClick={copyPreviousProject} disabled={selectedTaskIds.length === 0 && selectedMemberIds.length === 0 && !copyCriteria} className="ui-button ui-button-primary shrink-0">선택 항목 가져오기</button></div>}
+        {message && <div className="mt-4 shrink-0 border-t border-gray-200 pt-4"><p className="flex items-center gap-2 text-sm text-success">{previousImportComplete && <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 fill-current"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.86-9.78a.75.75 0 0 0-1.22-.88l-3.24 4.48-1.98-1.98a.75.75 0 0 0-1.06 1.06l2.6 2.6a.75.75 0 0 0 1.14-.1l3.76-5.18Z" clipRule="evenodd" /></svg>}{message}</p></div>}
+        {mode === 'previous' && sourceProject && <div className="mt-4 flex shrink-0 items-center justify-between gap-4 border-t border-gray-200 pt-4"><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={copyCriteria} onChange={(event) => { setCopyCriteria(event.target.checked); setPreviousImportComplete(false) }} /> 평가기준도 가져오기</label><button type="button" onClick={previousImportComplete ? onClose : copyPreviousProject} disabled={!previousImportComplete && selectedTaskIds.length === 0 && selectedMemberIds.length === 0 && !copyCriteria} className={`ui-button ui-button-primary shrink-0 ${previousImportComplete ? 'quick-start-complete' : ''}`}>{previousImportComplete ? '시작하기' : '선택 항목 가져오기'}</button></div>}
       </div>
     </div>
   )
