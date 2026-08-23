@@ -187,7 +187,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
   return (
     <div className="ui-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="quick-start-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div className="ui-modal-panel flex h-[min(500px,calc(100vh-2rem))] max-w-[680px] flex-col overflow-hidden !rounded-xl !p-6">
+      <div className="ui-modal-panel flex h-[min(680px,calc(100vh-2rem))] max-w-3xl flex-col overflow-hidden">
         <div className="flex shrink-0 items-start justify-between gap-4 pb-3">
           <div><h2 id="quick-start-title" className="text-lg font-semibold leading-6 text-gray-950">빠른 시작</h2><p className="mt-1 text-sm text-gray-500">과제와 팀원을 빠르게 준비합니다. 닫으면 기존 화면에서 각각 입력할 수 있습니다.</p></div>
           <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-gray-100" aria-label="빠른 시작 닫기"><img src={QUICK_START_CLOSE_ICON} alt="" className="h-3.5 w-3.5" /></button>
