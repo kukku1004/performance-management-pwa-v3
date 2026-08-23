@@ -6,11 +6,11 @@ import type { Task, TeamMember } from '../types'
 import { downloadQuickStartTemplate, parseQuickStartWorkbook } from '../utils/excel'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
+import ModalCloseButton from './ModalCloseButton'
 
 type StartMode = 'direct' | 'excel' | 'previous'
 type DirectTarget = 'tasks' | 'members'
 
-const QUICK_START_CLOSE_ICON = `${import.meta.env.BASE_URL}assets/quick-start-close.svg`
 const QUICK_START_REMOVE_ICON = `${import.meta.env.BASE_URL}assets/quick-start-remove.svg`
 
 interface ProjectSetupStartProps {
@@ -39,7 +39,6 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
   const [draftInput, setDraftInput] = useState('')
   const [taskDrafts, setTaskDrafts] = useState<string[]>([])
   const [memberDrafts, setMemberDrafts] = useState<string[]>([])
-  const [sourceTeamId, setSourceTeamId] = useState(activeProject?.teamId ?? '')
   const [sourceProjectId, setSourceProjectId] = useState('')
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([])
@@ -50,9 +49,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
   if (!open) return null
 
-  const sourceProjects = workspace.projects.filter((project) => (
-    project.teamId === sourceTeamId && project.id !== activeProject?.id
-  ))
+  const sourceProjects = workspace.projects.filter((project) => project.id !== activeProject?.id)
   const sourceProject = sourceProjects.find((project) => project.id === sourceProjectId)
 
   function selectDirectTarget(target: DirectTarget) {
@@ -191,7 +188,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
       <div className="ui-modal-panel flex h-[min(680px,calc(100vh-2rem))] max-w-3xl flex-col overflow-hidden">
         <div className="flex shrink-0 items-start justify-between gap-4 pb-3">
           <div><h2 id="quick-start-title" className="text-lg font-semibold leading-6 text-gray-950">빠른 시작</h2><p className="mt-1 text-sm text-gray-500">과제와 팀원을 빠르게 준비합니다. 닫으면 기존 화면에서 각각 입력할 수 있습니다.</p></div>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-gray-100" aria-label="빠른 시작 닫기"><img src={QUICK_START_CLOSE_ICON} alt="" className="h-3.5 w-3.5" /></button>
+          <ModalCloseButton onClick={onClose} label="빠른 시작 닫기" />
         </div>
 
         <div className="flex shrink-0 overflow-x-auto border-b border-gray-200" role="tablist" aria-label="빠른 시작 방식">
@@ -240,29 +237,43 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
           </section>}
 
           {mode === 'previous' && <section>
-            <div><h3 className="ui-section-title">이전 평가 선택</h3><p className="mt-1 text-sm text-gray-500">이 계정에서 만든 팀과 평가기간을 선택한 뒤 필요한 과제와 팀원만 가져옵니다. 원본은 변경되지 않습니다.</p></div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="text-sm font-medium text-gray-800">팀<select value={sourceTeamId} onChange={(event) => { setSourceTeamId(event.target.value); setSourceProjectId(''); setSelectedTaskIds([]); setSelectedMemberIds([]) }} className="ui-field mt-2"><option value="">팀 선택</option>{workspace.teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label>
-              <label className="text-sm font-medium text-gray-800">평가기간<select value={sourceProjectId} onChange={(event) => selectSourceProject(event.target.value)} disabled={!sourceTeamId} className="ui-field mt-2"><option value="">평가기간 선택</option>{sourceProjects.map((project) => <option key={project.id} value={project.id}>{formatEvaluationPeriod(project.period)}</option>)}</select></label>
-            </div>
-            {!sourceProject && <div className="ui-empty mt-5">팀과 평가기간을 선택하면 과제와 팀원 목록이 표시됩니다.</div>}
+            <div><h3 className="ui-section-title">가져올 평가 선택</h3><p className="mt-1 text-sm text-gray-500">팀과 평가기간을 한 번에 선택하세요. 선택한 과제와 팀원만 복사되며 원본은 변경되지 않습니다.</p></div>
+            {sourceProjects.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2" role="list" aria-label="가져올 평가 목록">
+                {sourceProjects.map((project) => {
+                  const teamName = workspace.teams.find((team) => team.id === project.teamId)?.name ?? '팀'
+                  const selected = project.id === sourceProjectId
+                  return (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => selectSourceProject(project.id)}
+                      className={`inline-flex h-9 items-center rounded-full border px-4 text-sm font-medium transition-colors ${selected ? 'border-accent bg-orange-50 text-accent' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:text-gray-950'}`}
+                      aria-pressed={selected}
+                    >
+                      {teamName} · {formatEvaluationPeriod(project.period)}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : <div className="ui-empty mt-5">가져올 수 있는 이전 평가가 없습니다.</div>}
             {sourceProject && <>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <section className="rounded-lg border border-gray-200 p-4">
                   <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-gray-900">과제</h4><button type="button" className="ui-button ui-button-ghost ui-button-sm" onClick={() => setSelectedTaskIds(selectedTaskIds.length === sourceProject.appState.tasks.length ? [] : sourceProject.appState.tasks.map((task) => task.id))}>전체 {selectedTaskIds.length === sourceProject.appState.tasks.length ? '해제' : '선택'}</button></div>
-                  <div className="mt-3 max-h-40 space-y-1 overflow-y-auto">{sourceProject.appState.tasks.map((task) => <label key={task.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm hover:bg-gray-50"><input type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={() => toggleSelected(task.id, selectedTaskIds, setSelectedTaskIds)} /> <span>{task.name}</span></label>)}{sourceProject.appState.tasks.length === 0 && <p className="text-sm text-gray-400">등록된 과제가 없습니다.</p>}</div>
+                  <div className="mt-3 space-y-1">{sourceProject.appState.tasks.map((task) => <label key={task.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm hover:bg-gray-50"><input type="checkbox" checked={selectedTaskIds.includes(task.id)} onChange={() => toggleSelected(task.id, selectedTaskIds, setSelectedTaskIds)} /> <span>{task.name}</span></label>)}{sourceProject.appState.tasks.length === 0 && <p className="text-sm text-gray-400">등록된 과제가 없습니다.</p>}</div>
                 </section>
                 <section className="rounded-lg border border-gray-200 p-4">
                   <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-gray-900">팀원</h4><button type="button" className="ui-button ui-button-ghost ui-button-sm" onClick={() => setSelectedMemberIds(selectedMemberIds.length === sourceProject.appState.members.length ? [] : sourceProject.appState.members.map((member) => member.id))}>전체 {selectedMemberIds.length === sourceProject.appState.members.length ? '해제' : '선택'}</button></div>
-                  <div className="mt-3 max-h-40 space-y-1 overflow-y-auto">{sourceProject.appState.members.map((member) => <label key={member.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm hover:bg-gray-50"><input type="checkbox" checked={selectedMemberIds.includes(member.id)} onChange={() => toggleSelected(member.id, selectedMemberIds, setSelectedMemberIds)} /> <span>{member.name}</span></label>)}{sourceProject.appState.members.length === 0 && <p className="text-sm text-gray-400">등록된 팀원이 없습니다.</p>}</div>
+                  <div className="mt-3 space-y-1">{sourceProject.appState.members.map((member) => <label key={member.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm hover:bg-gray-50"><input type="checkbox" checked={selectedMemberIds.includes(member.id)} onChange={() => toggleSelected(member.id, selectedMemberIds, setSelectedMemberIds)} /> <span>{member.name}</span></label>)}{sourceProject.appState.members.length === 0 && <p className="text-sm text-gray-400">등록된 팀원이 없습니다.</p>}</div>
                 </section>
               </div>
-              <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-4"><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={copyCriteria} onChange={(event) => setCopyCriteria(event.target.checked)} /> 평가기준도 가져오기</label><button type="button" onClick={copyPreviousProject} disabled={selectedTaskIds.length === 0 && selectedMemberIds.length === 0 && !copyCriteria} className="ui-button ui-button-primary">선택 항목 가져오기</button></div>
             </>}
           </section>}
         </div>
 
         {message && <div className="mt-4 shrink-0 border-t border-gray-200 pt-4"><p className="text-sm text-success">{message}</p></div>}
+        {mode === 'previous' && sourceProject && <div className="mt-4 flex shrink-0 items-center justify-between gap-4 border-t border-gray-200 pt-4"><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={copyCriteria} onChange={(event) => setCopyCriteria(event.target.checked)} /> 평가기준도 가져오기</label><button type="button" onClick={copyPreviousProject} disabled={selectedTaskIds.length === 0 && selectedMemberIds.length === 0 && !copyCriteria} className="ui-button ui-button-primary shrink-0">선택 항목 가져오기</button></div>}
       </div>
     </div>
   )

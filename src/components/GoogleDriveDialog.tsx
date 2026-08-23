@@ -14,6 +14,7 @@ import {
 } from '../utils/googleDrive'
 import Badge from './Badge'
 import FileDropZone from './FileDropZone'
+import ModalCloseButton from './ModalCloseButton'
 import { downloadFullBackup, downloadFullBackupJson, parseFullBackupJson } from '../utils/fullBackup'
 import { detectManagedWorkbookKind, parseMemberWorkbook, parseProjectPeerReviewWorkbook, parseTaskWorkbook } from '../utils/excel'
 import { syncAutoDistribution } from '../state/appReducer'
@@ -199,16 +200,16 @@ export default function GoogleDriveDialog({
 
   return (
     <div className="ui-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="drive-dialog-title">
-      <div className="ui-modal-panel h-[min(680px,calc(100vh-2rem))] max-w-3xl overflow-y-auto">
-        <div className="flex items-start justify-between gap-4">
+      <div className="ui-modal-panel flex h-[min(680px,calc(100vh-2rem))] max-w-3xl flex-col overflow-hidden">
+        <div className="flex shrink-0 items-start justify-between gap-4">
           <div>
             <h3 id="drive-dialog-title" className="ui-modal-title">데이터 관리</h3>
             <p className="mt-1 text-sm text-gray-600">현재 평가 프로젝트의 전체 데이터를 내보내거나 백업·복원합니다.</p>
           </div>
-          <button type="button" onClick={onClose} className="ui-button ui-button-ghost ui-button-sm">닫기</button>
+          <ModalCloseButton onClick={onClose} label="데이터 관리 닫기" />
         </div>
 
-        <div className="mt-5 inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1" role="tablist" aria-label="데이터 관리 방식">
+        <div className="mt-5 inline-flex w-fit shrink-0 rounded-lg border border-gray-200 bg-gray-100 p-1" role="tablist" aria-label="데이터 관리 방식">
           <button type="button" role="tab" aria-selected={activeTab === 'local'} onClick={() => setActiveTab('local')} className={`inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition ${activeTab === 'local' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             로컬 파일
@@ -219,6 +220,7 @@ export default function GoogleDriveDialog({
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         {activeTab === 'drive' && !isGoogleDriveConfigured() && (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Google Cloud OAuth Client ID를 `VITE_GOOGLE_CLIENT_ID` 환경변수에 설정해야 연결할 수 있습니다.
@@ -368,6 +370,7 @@ export default function GoogleDriveDialog({
         </div>}
 
         {(message || error) && <div className="mt-4 space-y-1 border-t border-gray-200 pt-3 text-sm">{message && <p className="text-success">{message}</p>}{error && <p className="text-danger">{error}</p>}</div>}
+        </div>
       </div>
       <ConfirmDialog
         open={resetOpen}
