@@ -129,6 +129,29 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+export interface DownloadableTemplateFile {
+  name: string
+  data: Uint8Array
+}
+
+function workbookTemplateFile(workbook: XLSX.WorkBook, name: string): DownloadableTemplateFile {
+  return {
+    name,
+    data: new Uint8Array(XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })),
+  }
+}
+
+export function downloadTemplateFile(file: DownloadableTemplateFile) {
+  downloadBlob(
+    new Blob([file.data.buffer as ArrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    file.name,
+  )
+}
+
+export function downloadTemplateFilesZip(files: DownloadableTemplateFile[], filename: string) {
+  downloadBlob(zipStoredFiles(files), filename)
+}
+
 async function downloadWorkbook(wb: XLSX.WorkBook, filename: string): Promise<boolean> {
   if (window.claude?.downloads) return saveViaClaudeDownloads(wb, filename)
   return downloadWorkbookAsFile(wb, filename)
@@ -152,64 +175,33 @@ export function detectManagedWorkbookKind(buffer: ArrayBuffer): ManagedWorkbookK
   return 'unknown'
 }
 
-export async function downloadTaskTemplate() {
+export function createTaskTemplateFile(tasks: Task[] = []) {
+  const taskRows = tasks.length > 0
+    ? tasks.map((task) => [
+        task.name,
+        task.importance,
+        task.workload,
+        task.objective,
+        task.achievement,
+        task.performanceGrade,
+      ])
+    : [
+        ['신규 랜딩페이지 제작', '핵심', '대', '전환율 15% 개선', '전환율 18% 달성', 'A'],
+        ['내부 협업툴 정비', '일반', '소', '', '', ''],
+      ]
   const rows = [
     [...TASK_HEADERS],
-    ['신규 랜딩페이지 제작', '핵심', '대', '전환율 15% 개선', '전환율 18% 달성', 'A'],
-    ['내부 협업툴 정비', '일반', '소', '', '', ''],
+    ...taskRows,
   ]
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 28 }, { wch: 28 }, { wch: 10 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '과제양식')
-  await downloadWorkbook(wb, '과제_업로드_양식.xlsx')
+  return workbookTemplateFile(wb, '과제_업로드_양식.xlsx')
 }
 
-export async function downloadQuickStartTemplate() {
-  const guideSheet = XLSX.utils.aoa_to_sheet([
-    ['성과평가 빠른 시작 통합 양식'],
-    ['과제·팀원·이전 성과·피어리뷰를 한 파일에 작성해 빠른 시작에서 업로드할 수 있습니다.'],
-    [],
-    ['시트', '용도'],
-    ['과제양식', '현재 평가기간의 과제와 과제 성과 입력'],
-    ['팀원양식', '현재 평가기간의 평가 대상 팀원 입력'],
-    ['성과입력', '같은 팀원의 이전 5개년 업적(상/하)·역량 이력 입력'],
-    ['피어리뷰', '과제별 리뷰어가 팀원에게 남긴 기여도·수행등급·근거 입력'],
-  ])
-  guideSheet['!cols'] = [{ wch: 18 }, { wch: 72 }]
-  const taskSheet = XLSX.utils.aoa_to_sheet([
-    [...TASK_HEADERS],
-    ['신규 랜딩페이지 제작', '핵심', '대', '전환율 15% 개선', '', ''],
-    ['내부 협업툴 정비', '일반', '소', '', '', ''],
-  ])
-  taskSheet['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 28 }, { wch: 28 }, { wch: 10 }]
-  const memberSheet = XLSX.utils.aoa_to_sheet([
-    [...MEMBER_HEADERS],
-    ['김민준', '팀장', '과장', 7, '기획', ''],
-    ['이서연', '', '대리', 3, '디자인', ''],
-  ])
-  memberSheet['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 16 }, { wch: 30 }]
-  const growthSheet = XLSX.utils.aoa_to_sheet([
-    ['이름', '직급', '승진심사 시기', '평가연도', '업적(상)', '업적(하)', '역량'],
-    ['김민준', '과장', '2029-04', 2025, 'A', 'B', 'A'],
-    ['김민준', '', '', 2024, 'B', 'B', 'A'],
-    ['이서연', '대리', '2028-03', 2025, 'B', 'A', 'A'],
-    ['이서연', '', '', 2024, 'B', 'B', 'B'],
-  ])
-  growthSheet['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }]
-  const peerReviewSheet = XLSX.utils.aoa_to_sheet([
-    ['과제명', '리뷰어', '대상팀원', '기여도(%)', '수행등급', '근거'],
-    ['신규 랜딩페이지 제작', '김민준', '김민준', 50, 'A', '기획과 일정 조율을 주도했습니다.'],
-    ['신규 랜딩페이지 제작', '김민준', '이서연', 50, 'A', '핵심 화면 설계를 담당했습니다.'],
-  ])
-  peerReviewSheet['!cols'] = [{ wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 13 }, { wch: 12 }, { wch: 48 }]
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, guideSheet, '안내')
-  XLSX.utils.book_append_sheet(workbook, taskSheet, '과제양식')
-  XLSX.utils.book_append_sheet(workbook, memberSheet, '팀원양식')
-  XLSX.utils.book_append_sheet(workbook, growthSheet, '성과입력')
-  XLSX.utils.book_append_sheet(workbook, peerReviewSheet, '피어리뷰')
-  await downloadWorkbook(workbook, '성과평가_빠른시작_통합양식.xlsx')
+export async function downloadTaskTemplate() {
+  downloadTemplateFile(createTaskTemplateFile())
 }
 
 export interface TaskImportResult {
@@ -290,17 +282,163 @@ export function parseTaskWorkbook(buffer: ArrayBuffer, existingTasks: Task[]): T
 
 const MEMBER_HEADERS = ['이름', '직책', '직급', '연차', '역할', '코멘트'] as const
 
-export async function downloadMemberTemplate() {
+export function createMemberTemplateFile(members: TeamMember[] = []) {
+  const memberRows = members.length > 0
+    ? members.map((member) => [
+        member.name,
+        member.position,
+        member.level,
+        member.yearsOfService ?? '',
+        member.role,
+        member.comment,
+      ])
+    : [
+        ['김민준', '팀장', '과장', 7, '기획', ''],
+        ['이서연', '', '대리', 3, '디자인', ''],
+      ]
   const rows = [
     [...MEMBER_HEADERS],
-    ['김민준', '팀장', '과장', 7, '기획', ''],
-    ['이서연', '', '대리', 3, '디자인', ''],
+    ...memberRows,
   ]
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 16 }, { wch: 30 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '팀원양식')
-  await downloadWorkbook(wb, '팀원_업로드_양식.xlsx')
+  return workbookTemplateFile(wb, '팀원_업로드_양식.xlsx')
+}
+
+export async function downloadMemberTemplate() {
+  downloadTemplateFile(createMemberTemplateFile())
+}
+
+export type QuickStartTemplateKind = 'tasks' | 'members' | 'growth' | 'peerReviews'
+
+function templateMembers(members: TeamMember[]) {
+  if (members.length > 0) return members
+  return [
+    { id: 'template-member-1', name: '김민준', active: true, position: '팀장', level: '과장', yearsOfService: 7, role: '기획', comment: '' },
+    { id: 'template-member-2', name: '이서연', active: true, position: '', level: '대리', yearsOfService: 3, role: '디자인', comment: '' },
+  ] satisfies TeamMember[]
+}
+
+function templateTasks(tasks: Task[]) {
+  if (tasks.length > 0) return tasks
+  return [
+    { id: 'template-task-1', name: '신규 랜딩페이지 제작', importance: '핵심', workload: '대', objective: '전환율 15% 개선', achievement: '', performanceGrade: 'B' },
+    { id: 'template-task-2', name: '내부 협업툴 정비', importance: '일반', workload: '소', objective: '', achievement: '', performanceGrade: 'B' },
+  ] satisfies Task[]
+}
+
+export function createGrowthHistoryTemplateFile(members: TeamMember[] = [], currentYear = new Date().getFullYear()) {
+  const targetMembers = templateMembers(members)
+  const rows: (string | number)[][] = [
+    ['이름', '직급', '승진심사 시기', '평가연도', '업적(상)', '업적(하)', '역량'],
+    ...targetMembers.flatMap((member) => Array.from({ length: 5 }, (_, index) => [
+      index === 0 ? member.name : '',
+      index === 0 ? member.level : '',
+      index === 0 ? `${currentYear + 3}-03` : '',
+      currentYear - index,
+      '',
+      '',
+      '',
+    ])),
+  ]
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!cols'] = [{ wch: 15 }, { wch: 11 }, { wch: 17 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }]
+  ws['!autofilter'] = { ref: `A1:G${rows.length}` }
+  ;(ws as XLSX.WorkSheet & { '!freeze'?: unknown })['!freeze'] = { xSplit: 4, ySplit: 1, topLeftCell: 'E2', activePane: 'bottomRight', state: 'frozen' }
+  ;(ws as XLSX.WorkSheet & { '!dataValidation'?: unknown[] })['!dataValidation'] = [{
+    sqref: `E2:G${rows.length}`,
+    type: 'list',
+    formula1: '"S,A,B,C,D,-"',
+    allowBlank: true,
+  }]
+  const guide = XLSX.utils.aoa_to_sheet([
+    ['이전 성과 입력 안내'],
+    ['1', '팀원별 최근 5년 업적(상/하)과 역량 등급을 입력합니다.'],
+    ['2', '등급은 S/A/B/C/D 또는 -를 입력합니다.'],
+    ['3', '같은 팀원은 첫 행에만 이름·직급·승진심사 시기를 입력합니다.'],
+  ])
+  guide['!cols'] = [{ wch: 8 }, { wch: 72 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, guide, '안내')
+  XLSX.utils.book_append_sheet(wb, ws, '성과입력')
+  return workbookTemplateFile(wb, '이전_성과_업로드_양식.xlsx')
+}
+
+export function createIntegratedPeerReviewTemplateFile(tasks: Task[] = [], members: TeamMember[] = []) {
+  const targetTasks = templateTasks(tasks)
+  const targetMembers = templateMembers(members)
+  const percentages = evenlyDistributedPercentages(targetMembers.length)
+  const rows: (string | number)[][] = [
+    ['과제명', '리뷰어', '대상팀원', '기여도(%)', '수행등급', '근거'],
+    ...targetTasks.flatMap((task) => targetMembers.flatMap((reviewer) => targetMembers.map((target, targetIndex) => [
+      task.name,
+      reviewer.name,
+      target.name,
+      percentages[targetIndex],
+      '',
+      '',
+    ]))),
+  ]
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!cols'] = [{ wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 13 }, { wch: 12 }, { wch: 48 }]
+  ws['!autofilter'] = { ref: `A1:F${rows.length}` }
+  ;(ws as XLSX.WorkSheet & { '!freeze'?: unknown })['!freeze'] = { ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
+  ;(ws as XLSX.WorkSheet & { '!dataValidation'?: unknown[] })['!dataValidation'] = [
+    { sqref: `D2:D${rows.length}`, type: 'whole', operator: 'between', formula1: '0', formula2: '100', allowBlank: true },
+    { sqref: `E2:E${rows.length}`, type: 'list', formula1: '"S,A,B,C,D"', allowBlank: true },
+  ]
+  const guide = XLSX.utils.aoa_to_sheet([
+    ['피어리뷰 입력 안내'],
+    ['1', '과제별 리뷰어가 각 팀원의 기여도·수행등급·근거를 입력합니다.'],
+    ['2', '과제와 팀원이 이미 등록된 프로젝트에서 받으면 현재 명단으로 양식이 채워집니다.'],
+    ['3', '기여도는 과제별 대상팀원 합계가 100%가 되도록 확인합니다.'],
+  ])
+  guide['!cols'] = [{ wch: 8 }, { wch: 82 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, guide, '안내')
+  XLSX.utils.book_append_sheet(wb, ws, '피어리뷰')
+  return workbookTemplateFile(wb, '피어리뷰_업로드_양식.xlsx')
+}
+
+export function createQuickStartTemplateFiles(
+  tasks: Task[] = [],
+  members: TeamMember[] = [],
+  currentYear = new Date().getFullYear(),
+) {
+  return [
+    createTaskTemplateFile(tasks),
+    createMemberTemplateFile(members),
+    createGrowthHistoryTemplateFile(members, currentYear),
+    createIntegratedPeerReviewTemplateFile(tasks, members),
+  ]
+}
+
+export function downloadQuickStartTemplateFile(
+  kind: QuickStartTemplateKind,
+  tasks: Task[] = [],
+  members: TeamMember[] = [],
+  currentYear = new Date().getFullYear(),
+) {
+  const fileByKind: Record<QuickStartTemplateKind, DownloadableTemplateFile> = {
+    tasks: createTaskTemplateFile(tasks),
+    members: createMemberTemplateFile(members),
+    growth: createGrowthHistoryTemplateFile(members, currentYear),
+    peerReviews: createIntegratedPeerReviewTemplateFile(tasks, members),
+  }
+  downloadTemplateFile(fileByKind[kind])
+}
+
+export function downloadQuickStartTemplateBundle(
+  tasks: Task[] = [],
+  members: TeamMember[] = [],
+  currentYear = new Date().getFullYear(),
+) {
+  downloadTemplateFilesZip(
+    createQuickStartTemplateFiles(tasks, members, currentYear),
+    '성과평가_입력양식_전체.zip',
+  )
 }
 
 export interface MemberImportResult {

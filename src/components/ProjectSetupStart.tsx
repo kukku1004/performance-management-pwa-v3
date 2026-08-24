@@ -4,7 +4,15 @@ import { useAppState } from '../state/AppContext'
 import { syncAutoDistribution } from '../state/appReducer'
 import { useWorkspace } from '../state/WorkspaceContext'
 import type { Task, TeamMember } from '../types'
-import { detectManagedWorkbookKind, downloadQuickStartTemplate, parseIntegratedPeerReviewWorkbook, parseProjectPeerReviewWorkbook, parseQuickStartWorkbook } from '../utils/excel'
+import {
+  detectManagedWorkbookKind,
+  downloadQuickStartTemplateBundle,
+  downloadQuickStartTemplateFile,
+  parseIntegratedPeerReviewWorkbook,
+  parseProjectPeerReviewWorkbook,
+  parseQuickStartWorkbook,
+  type QuickStartTemplateKind,
+} from '../utils/excel'
 import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/growthExcel'
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
@@ -15,6 +23,13 @@ type StartMode = 'direct' | 'excel' | 'previous'
 type DirectTarget = 'tasks' | 'members'
 
 const QUICK_START_REMOVE_ICON = `${import.meta.env.BASE_URL}assets/quick-start-remove.svg`
+
+const QUICK_START_TEMPLATES: { kind: QuickStartTemplateKind; label: string; description: string }[] = [
+  { kind: 'tasks', label: '과제 입력 양식', description: '과제명·중요도·업무량·성과정보' },
+  { kind: 'members', label: '팀원 입력 양식', description: '이름·직책·직급·연차·역할' },
+  { kind: 'growth', label: '이전 성과 입력 양식', description: '팀원별 최근 5년 업적·역량 이력' },
+  { kind: 'peerReviews', label: '피어리뷰 입력 양식', description: '과제별 리뷰어·대상팀원·기여도·근거' },
+]
 
 interface ProjectSetupStartProps {
   open: boolean
@@ -280,7 +295,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
         </div>
 
         <div className="flex shrink-0 overflow-x-auto border-b border-gray-200" role="tablist" aria-label="빠른 시작 방식">
-          {([['direct', '직접 입력', '선택한 영역에 이름을 빠르게 등록'], ['excel', 'Excel로 시작', '통합 양식으로 내려받고 일괄 등록'], ['previous', '이전 평가 가져오기', '팀과 평가기간을 골라 선택 복사']] as const).map(([value, label, description]) => (
+          {([['direct', '직접 입력', '선택한 영역에 이름을 빠르게 등록'], ['excel', 'Excel로 시작', '필요한 양식을 내려받고 일괄 등록'], ['previous', '이전 평가 가져오기', '팀과 평가기간을 골라 선택 복사']] as const).map(([value, label, description]) => (
             <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => { setMode(value); setMessage(''); setPreviousImportComplete(false) }} className={`min-w-[180px] flex-1 border-b-2 px-0 py-3 text-left transition-colors ${mode === value ? 'border-accent' : 'border-transparent hover:bg-gray-50'}`}>
               <span className={`block text-sm font-semibold ${mode === value ? 'text-accent' : 'text-gray-950'}`}>{label}</span>
               <span className="mt-0.5 block truncate text-xs leading-5 text-gray-400">{description}</span>
@@ -312,14 +327,47 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
           {mode === 'excel' && <section>
             <div className="flex items-start justify-between gap-4">
-              <div><h3 className="ui-section-title">통합 Excel</h3><p className="mt-1 text-sm text-gray-500">과제·팀원·이전 성과·피어리뷰를 한 통합 양식으로 등록합니다. 각 데이터의 기존 Excel 파일도 함께 올릴 수 있습니다.</p></div>
-              <button type="button" onClick={() => { void downloadQuickStartTemplate() }} className="ui-button ui-button-secondary shrink-0">통합 양식 다운로드</button>
+              <div>
+                <h3 className="ui-section-title">양식 다운로드</h3>
+                <p className="mt-1 text-sm text-gray-500">필요한 양식을 각각 받거나 전체 파일을 ZIP으로 한 번에 받습니다.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => downloadQuickStartTemplateBundle(state.tasks, state.members, activeProject?.period.year)}
+                className="ui-button ui-button-primary shrink-0"
+              >전체 ZIP 다운로드</button>
+            </div>
+            <div className="mt-5 overflow-hidden rounded-lg border border-gray-200 bg-white">
+              {QUICK_START_TEMPLATES.map((template, index) => (
+                <div key={template.kind} className={`flex min-h-16 items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6.75 3.75h6.1L17.25 8v12.25H6.75z" />
+                      <path d="M12.75 3.75V8h4.5M9 12h6M9 15.5h6" />
+                    </svg>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900">{template.label}</p>
+                    <p className="mt-0.5 truncate text-xs text-gray-400">{template.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => downloadQuickStartTemplateFile(template.kind, state.tasks, state.members, activeProject?.period.year)}
+                    className="ui-button ui-button-secondary ui-button-sm shrink-0"
+                  >다운로드</button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 border-t border-gray-200 pt-5">
+              <h3 className="ui-section-title">작성한 양식 업로드</h3>
+              <p className="mt-1 text-sm text-gray-500">과제·팀원·이전 성과·피어리뷰 파일을 함께 올리면 데이터 종류를 자동으로 구분합니다.</p>
             </div>
             <FileDropZone
               className="mt-5"
               onClick={() => excelInputRef.current?.click()}
               onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
-              description="통합 양식 또는 과제·팀원·이전 성과·피어리뷰 파일 여러 개 업로드 가능 (.xlsx)"
+              title="작성한 양식 파일을 여기에 드래그"
+              description="여러 Excel 파일 동시 업로드 가능 (.xlsx)"
             />
             <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
           </section>}
