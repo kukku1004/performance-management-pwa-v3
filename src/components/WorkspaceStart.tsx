@@ -249,7 +249,7 @@ export default function WorkspaceStart() {
           <>
             <div className="mt-5 flex items-center justify-between gap-4 overflow-hidden border-b border-slate-200 pb-5">
               <div className="flex min-w-0 gap-4 overflow-x-auto" role="tablist" aria-label="팀 선택">
-                {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${active ? 'border-accent bg-white text-accent' : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'}`}>{team.name}<span className="ml-1.5 font-medium opacity-75">{team.members.length}명 · {count}개</span></button> })}
+                {workspace.teams.map((team) => { const count = (projectsByTeam.get(team.id) ?? []).length; const active = team.id === selectedTeam.id; return <button key={team.id} type="button" role="tab" aria-selected={active} onClick={() => setSelectedTeamId(team.id)} className={`shrink-0 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${active ? 'border-accent bg-white text-accent' : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'}`}>{team.name}<span className="ml-1.5 font-medium opacity-75">평가 {count}개</span></button> })}
               </div>
               <button type="button" onClick={() => setCreatingTeam(true)} className="ui-button ui-button-secondary shrink-0">+ 새 팀</button>
             </div>
