@@ -148,7 +148,7 @@ export function detectManagedWorkbookKind(buffer: ArrayBuffer): ManagedWorkbookK
   const rows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: '' })
   const labels = new Set(rows.slice(0, 8).flat().map((value) => normalizedLabel(value)))
   if (labels.has('과제명') && labels.has('과제등급')) return 'tasks'
-  if (labels.has('이름') && (labels.has('직급') || labels.has('직책'))) return 'members'
+  if (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도')) return 'members'
   return 'unknown'
 }
 
@@ -166,6 +166,17 @@ export async function downloadTaskTemplate() {
 }
 
 export async function downloadQuickStartTemplate() {
+  const guideSheet = XLSX.utils.aoa_to_sheet([
+    ['성과평가 빠른 시작 통합 양식'],
+    ['과제·팀원·이전 성과·피어리뷰를 한 파일에 작성해 빠른 시작에서 업로드할 수 있습니다.'],
+    [],
+    ['시트', '용도'],
+    ['과제양식', '현재 평가기간의 과제와 과제 성과 입력'],
+    ['팀원양식', '현재 평가기간의 평가 대상 팀원 입력'],
+    ['성과입력', '같은 팀원의 이전 5개년 업적(상/하)·역량 이력 입력'],
+    ['피어리뷰', '과제별 리뷰어가 팀원에게 남긴 기여도·수행등급·근거 입력'],
+  ])
+  guideSheet['!cols'] = [{ wch: 18 }, { wch: 72 }]
   const taskSheet = XLSX.utils.aoa_to_sheet([
     [...TASK_HEADERS],
     ['신규 랜딩페이지 제작', '핵심', '대', '전환율 15% 개선', '', ''],
@@ -178,9 +189,26 @@ export async function downloadQuickStartTemplate() {
     ['이서연', '', '대리', 3, '디자인', ''],
   ])
   memberSheet['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 16 }, { wch: 30 }]
+  const growthSheet = XLSX.utils.aoa_to_sheet([
+    ['이름', '직급', '승진심사 시기', '평가연도', '업적(상)', '업적(하)', '역량'],
+    ['김민준', '과장', '2029-04', 2025, 'A', 'B', 'A'],
+    ['김민준', '', '', 2024, 'B', 'B', 'A'],
+    ['이서연', '대리', '2028-03', 2025, 'B', 'A', 'A'],
+    ['이서연', '', '', 2024, 'B', 'B', 'B'],
+  ])
+  growthSheet['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }]
+  const peerReviewSheet = XLSX.utils.aoa_to_sheet([
+    ['과제명', '리뷰어', '대상팀원', '기여도(%)', '수행등급', '근거'],
+    ['신규 랜딩페이지 제작', '김민준', '김민준', 50, 'A', '기획과 일정 조율을 주도했습니다.'],
+    ['신규 랜딩페이지 제작', '김민준', '이서연', 50, 'A', '핵심 화면 설계를 담당했습니다.'],
+  ])
+  peerReviewSheet['!cols'] = [{ wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 13 }, { wch: 12 }, { wch: 48 }]
   const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, guideSheet, '안내')
   XLSX.utils.book_append_sheet(workbook, taskSheet, '과제양식')
   XLSX.utils.book_append_sheet(workbook, memberSheet, '팀원양식')
+  XLSX.utils.book_append_sheet(workbook, growthSheet, '성과입력')
+  XLSX.utils.book_append_sheet(workbook, peerReviewSheet, '피어리뷰')
   await downloadWorkbook(workbook, '성과평가_빠른시작_통합양식.xlsx')
 }
 
@@ -377,7 +405,7 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
       tasks = result.tasks
       taskCount += result.importedCount
       errors.push(...result.errors.map((error) => `${sheetName}: ${error}`))
-    } else if (labels.has('이름') && (labels.has('직급') || labels.has('직책'))) {
+    } else if (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도')) {
       const result = parseMemberWorkbook(singleSheetBuffer, members)
       members = result.members
       memberCount += result.importedCount
@@ -385,8 +413,92 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
     }
   })
 
-  if (taskCount === 0 && memberCount === 0) errors.push('과제 또는 팀원 양식을 찾지 못했습니다.')
   return { tasks, members, taskCount, memberCount, errors }
+}
+
+export interface IntegratedPeerReviewImportResult {
+  reviews: PeerReview[]
+  importedCount: number
+  errors: string[]
+}
+
+const INTEGRATED_PEER_HEADERS = {
+  task: ['과제명', '과제'],
+  reviewer: ['리뷰어', '평가자'],
+  target: ['대상팀원', '평가대상', '대상자'],
+  contribution: ['기여도(%)', '기여도', '기여도 %'],
+  grade: ['수행등급', '개인수행등급', '등급'],
+  evidence: ['근거', '코멘트', '의견'],
+}
+
+function findHeaderColumn(row: unknown[], aliases: string[]) {
+  return row.findIndex((value) => aliases.includes(normalizedLabel(value)))
+}
+
+export function parseIntegratedPeerReviewWorkbook(
+  buffer: ArrayBuffer,
+  tasks: Task[],
+  members: TeamMember[],
+): IntegratedPeerReviewImportResult {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const taskByName = new Map(tasks.map((task) => [normalizedLabel(task.name), task]))
+  const memberByName = new Map(members.map((member) => [normalizedLabel(member.name), member]))
+  const reviews: PeerReview[] = []
+  const errors: string[] = []
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1, defval: '' })
+    const headerIndex = rows.slice(0, 10).findIndex((row) => (
+      findHeaderColumn(row, INTEGRATED_PEER_HEADERS.task) >= 0
+      && findHeaderColumn(row, INTEGRATED_PEER_HEADERS.reviewer) >= 0
+      && findHeaderColumn(row, INTEGRATED_PEER_HEADERS.target) >= 0
+    ))
+    if (headerIndex < 0) return
+    const header = rows[headerIndex]
+    const taskColumn = findHeaderColumn(header, INTEGRATED_PEER_HEADERS.task)
+    const reviewerColumn = findHeaderColumn(header, INTEGRATED_PEER_HEADERS.reviewer)
+    const targetColumn = findHeaderColumn(header, INTEGRATED_PEER_HEADERS.target)
+    const contributionColumn = findHeaderColumn(header, INTEGRATED_PEER_HEADERS.contribution)
+    const gradeColumn = findHeaderColumn(header, INTEGRATED_PEER_HEADERS.grade)
+    const evidenceColumn = findHeaderColumn(header, INTEGRATED_PEER_HEADERS.evidence)
+
+    rows.slice(headerIndex + 1).forEach((row, rowOffset) => {
+      const rowNumber = headerIndex + rowOffset + 2
+      if (!row.some((value) => normalizedLabel(value))) return
+      const taskName = normalizedLabel(row[taskColumn])
+      const reviewerName = normalizedLabel(row[reviewerColumn])
+      const targetName = normalizedLabel(row[targetColumn])
+      const task = taskByName.get(taskName)
+      const reviewer = memberByName.get(reviewerName)
+      const target = memberByName.get(targetName)
+      if (!task) { errors.push(`${sheetName} ${rowNumber}행: 과제 '${taskName}'을(를) 찾을 수 없습니다.`); return }
+      if (!reviewer) { errors.push(`${sheetName} ${rowNumber}행: 리뷰어 '${reviewerName}'을(를) 찾을 수 없습니다.`); return }
+      if (!target) { errors.push(`${sheetName} ${rowNumber}행: 대상팀원 '${targetName}'을(를) 찾을 수 없습니다.`); return }
+      const contributionRaw = contributionColumn >= 0 ? row[contributionColumn] : ''
+      const contribution = contributionRaw === '' ? null : Number(contributionRaw)
+      if (contribution !== null && (!Number.isFinite(contribution) || contribution < 0 || contribution > 100)) {
+        errors.push(`${sheetName} ${rowNumber}행: 기여도는 0~100 숫자여야 합니다.`)
+        return
+      }
+      const gradeRaw = gradeColumn >= 0 ? normalizedLabel(row[gradeColumn]).toUpperCase() : ''
+      if (gradeRaw && !PERFORMANCE_GRADE_OPTIONS.includes(gradeRaw as PerformanceGrade)) {
+        errors.push(`${sheetName} ${rowNumber}행: 수행등급은 S/A/B/C/D 중 하나여야 합니다.`)
+        return
+      }
+      reviews.push({
+        id: uuidv4(),
+        taskId: task.id,
+        reviewerMemberId: reviewer.id,
+        reviewerName: reviewer.name,
+        targetMemberId: target.id,
+        contributionPercent: contribution,
+        grade: gradeRaw ? gradeRaw as PerformanceGrade : null,
+        evidence: evidenceColumn >= 0 ? String(row[evidenceColumn] ?? '').trim() : '',
+      })
+    })
+  })
+
+  return { reviews, importedCount: reviews.length, errors }
 }
 
 // ---------- Peer review template / import ----------

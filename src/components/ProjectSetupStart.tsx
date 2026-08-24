@@ -4,7 +4,8 @@ import { useAppState } from '../state/AppContext'
 import { syncAutoDistribution } from '../state/appReducer'
 import { useWorkspace } from '../state/WorkspaceContext'
 import type { Task, TeamMember } from '../types'
-import { detectManagedWorkbookKind, downloadQuickStartTemplate, parseProjectPeerReviewWorkbook, parseQuickStartWorkbook } from '../utils/excel'
+import { detectManagedWorkbookKind, downloadQuickStartTemplate, parseIntegratedPeerReviewWorkbook, parseProjectPeerReviewWorkbook, parseQuickStartWorkbook } from '../utils/excel'
+import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/growthExcel'
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
@@ -35,7 +36,7 @@ function mergeNames(current: string[], additions: string[]) {
 
 export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartProps) {
   const { state, dispatch } = useAppState()
-  const { workspace, activeProject, activeTeam } = useWorkspace()
+  const { workspace, activeProject, activeTeam, saveGrowthProfile } = useWorkspace()
   const [mode, setMode] = useState<StartMode>('direct')
   const [directTarget, setDirectTarget] = useState<DirectTarget>('tasks')
   const [draftInput, setDraftInput] = useState('')
@@ -99,6 +100,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
     let memberCount = 0
     let peerReviewFileCount = 0
     let peerReviewCount = 0
+    let growthMemberCount = 0
     const errors: string[] = []
     const loadedFiles: { file: File; buffer: ArrayBuffer; isPeerReview: boolean }[] = []
 
@@ -135,8 +137,37 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
       return known ? { ...member, id: known.id } : member
     })
 
+    let growthProfiles = activeTeam?.growthProfiles ?? []
+    const importedGrowthMembers = new Set<string>()
+    for (const { file, buffer, isPeerReview } of loadedFiles) {
+      if (isPeerReview || !containsGrowthHistoryData(buffer)) continue
+      try {
+        const result = parseGrowthHistoryWorkbook(buffer, members, growthProfiles)
+        growthProfiles = result.profiles
+        result.importedMembers.forEach((name) => importedGrowthMembers.add(name))
+        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+      } catch {
+        errors.push(`${file.name}: 이전 성과 데이터를 읽을 수 없습니다.`)
+      }
+    }
+    growthMemberCount = importedGrowthMembers.size
+
     let peerReviews = state.peerReviews
     const importContributions = syncAutoDistribution(tasks, members, state.contributions)
+    for (const { file, buffer, isPeerReview } of loadedFiles) {
+      if (isPeerReview) continue
+      try {
+        const result = parseIntegratedPeerReviewWorkbook(buffer, tasks, members)
+        if (result.reviews.length > 0) {
+          peerReviews = mergePeerReviews(peerReviews, result.reviews)
+          peerReviewFileCount += 1
+          peerReviewCount += result.importedCount
+        }
+        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+      } catch {
+        errors.push(`${file.name}: 피어리뷰 데이터를 읽을 수 없습니다.`)
+      }
+    }
     for (const { file, buffer, isPeerReview } of loadedFiles) {
       if (!isPeerReview) continue
       if (!activeProject) {
@@ -167,7 +198,8 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
     if (taskCount > 0) dispatch({ type: 'IMPORT_TASKS', payload: tasks })
     if (memberCount > 0) dispatch({ type: 'IMPORT_MEMBERS', payload: members })
     if (peerReviewFileCount > 0) dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: peerReviews })
-    setMessage(`과제 ${taskCount}건, 팀원 ${memberCount}건, 피어리뷰 ${peerReviewFileCount}개 파일(${peerReviewCount}건)을 확인했습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`)
+    if (growthMemberCount > 0) growthProfiles.forEach((profile) => saveGrowthProfile(profile))
+    setMessage(`과제 ${taskCount}건, 팀원 ${memberCount}건, 이전 성과 ${growthMemberCount}명, 피어리뷰 ${peerReviewFileCount}개 파일(${peerReviewCount}건)을 확인했습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`)
   }
 
   function selectSourceProject(projectId: string) {
@@ -280,14 +312,14 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
           {mode === 'excel' && <section>
             <div className="flex items-start justify-between gap-4">
-              <div><h3 className="ui-section-title">통합 Excel</h3><p className="mt-1 text-sm text-gray-500">과제와 팀원을 한 통합 양식으로 관리합니다. 기존 과제·팀원 및 피어리뷰 결과 파일도 함께 올릴 수 있습니다.</p></div>
+              <div><h3 className="ui-section-title">통합 Excel</h3><p className="mt-1 text-sm text-gray-500">과제·팀원·이전 성과·피어리뷰를 한 통합 양식으로 등록합니다. 각 데이터의 기존 Excel 파일도 함께 올릴 수 있습니다.</p></div>
               <button type="button" onClick={() => { void downloadQuickStartTemplate() }} className="ui-button ui-button-secondary shrink-0">통합 양식 다운로드</button>
             </div>
             <FileDropZone
               className="mt-5"
               onClick={() => excelInputRef.current?.click()}
               onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
-              description="통합 양식, 기존 과제·팀원, 피어리뷰 결과 파일 여러 개 업로드 가능 (.xlsx)"
+              description="통합 양식 또는 과제·팀원·이전 성과·피어리뷰 파일 여러 개 업로드 가능 (.xlsx)"
             />
             <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
           </section>}
