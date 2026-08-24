@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppState } from '../state/AppContext'
+import { syncAutoDistribution } from '../state/appReducer'
 import { useWorkspace } from '../state/WorkspaceContext'
 import type { Task, TeamMember } from '../types'
-import { downloadQuickStartTemplate, parseQuickStartWorkbook } from '../utils/excel'
+import { detectManagedWorkbookKind, downloadQuickStartTemplate, parseProjectPeerReviewWorkbook, parseQuickStartWorkbook } from '../utils/excel'
+import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
 import ModalCloseButton from './ModalCloseButton'
@@ -95,11 +97,28 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
     let members = state.members
     let taskCount = 0
     let memberCount = 0
+    let peerReviewFileCount = 0
+    let peerReviewCount = 0
     const errors: string[] = []
+    const loadedFiles: { file: File; buffer: ArrayBuffer; isPeerReview: boolean }[] = []
 
     for (const file of Array.from(files)) {
+      if (!/\.xlsx?$/i.test(file.name)) {
+        errors.push(`${file.name}: Excel 파일만 업로드할 수 있습니다.`)
+        continue
+      }
       try {
-        const result = parseQuickStartWorkbook(await file.arrayBuffer(), tasks, members)
+        const buffer = await file.arrayBuffer()
+        loadedFiles.push({ file, buffer, isPeerReview: detectManagedWorkbookKind(buffer) === 'peerReviews' })
+      } catch {
+        errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
+      }
+    }
+
+    for (const { file, buffer, isPeerReview } of loadedFiles) {
+      if (isPeerReview) continue
+      try {
+        const result = parseQuickStartWorkbook(buffer, tasks, members)
         tasks = result.tasks
         members = result.members
         taskCount += result.taskCount
@@ -115,9 +134,40 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
       const known = knownByName.get(normalizedName(member.name))
       return known ? { ...member, id: known.id } : member
     })
+
+    let peerReviews = state.peerReviews
+    const importContributions = syncAutoDistribution(tasks, members, state.contributions)
+    for (const { file, buffer, isPeerReview } of loadedFiles) {
+      if (!isPeerReview) continue
+      if (!activeProject) {
+        errors.push(`${file.name}: 현재 평가를 확인할 수 없습니다.`)
+        continue
+      }
+      try {
+        const result = parseProjectPeerReviewWorkbook(
+          buffer,
+          activeProject.id,
+          tasks,
+          members,
+          importContributions,
+          state.criteria.personalGradeWeight > 0,
+          formatEvaluationPeriod(activeProject.period),
+        )
+        if (result.reviews.length > 0) {
+          peerReviews = mergePeerReviews(peerReviews, result.reviews)
+          peerReviewFileCount += 1
+          peerReviewCount += result.reviews.length
+        }
+        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+      } catch {
+        errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
+      }
+    }
+
     if (taskCount > 0) dispatch({ type: 'IMPORT_TASKS', payload: tasks })
     if (memberCount > 0) dispatch({ type: 'IMPORT_MEMBERS', payload: members })
-    setMessage(`과제 ${taskCount}건, 팀원 ${memberCount}건을 확인했습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`)
+    if (peerReviewFileCount > 0) dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: peerReviews })
+    setMessage(`과제 ${taskCount}건, 팀원 ${memberCount}건, 피어리뷰 ${peerReviewFileCount}개 파일(${peerReviewCount}건)을 확인했습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`)
   }
 
   function selectSourceProject(projectId: string) {
@@ -230,14 +280,14 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
           {mode === 'excel' && <section>
             <div className="flex items-start justify-between gap-4">
-              <div><h3 className="ui-section-title">통합 Excel</h3><p className="mt-1 text-sm text-gray-500">과제와 팀원을 한 통합 양식으로 관리합니다. 기존 과제·팀원 양식도 함께 올릴 수 있습니다.</p></div>
+              <div><h3 className="ui-section-title">통합 Excel</h3><p className="mt-1 text-sm text-gray-500">과제와 팀원을 한 통합 양식으로 관리합니다. 기존 과제·팀원 및 피어리뷰 결과 파일도 함께 올릴 수 있습니다.</p></div>
               <button type="button" onClick={() => { void downloadQuickStartTemplate() }} className="ui-button ui-button-secondary shrink-0">통합 양식 다운로드</button>
             </div>
             <FileDropZone
               className="mt-5"
               onClick={() => excelInputRef.current?.click()}
               onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
-              description="통합 양식 또는 기존 과제·팀원 파일 여러 개 업로드 가능 (.xlsx)"
+              description="통합 양식, 기존 과제·팀원, 피어리뷰 결과 파일 여러 개 업로드 가능 (.xlsx)"
             />
             <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
           </section>}
