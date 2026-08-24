@@ -17,6 +17,21 @@ interface ParsedGrowthItem {
   auxiliaryMetrics?: GrowthAuxiliaryMetrics
 }
 
+export function containsGrowthHistoryData(buffer: ArrayBuffer) {
+  const workbook = XLSX.read(buffer, { type: 'array', sheetRows: 12 })
+  return workbook.SheetNames.some((sheetName) => {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1, defval: '' })
+    return rows.slice(0, 10).some((row) => {
+      const labels = row.map((value) => String(value ?? '').normalize('NFC').trim())
+      return labels.includes('이름') && (
+        (labels.includes('승진심사 시기') && labels.includes('평가연도'))
+        || labels.includes('평가 구분')
+        || labels.includes('구분')
+      )
+    })
+  })
+}
+
 function styleCell(
   ws: XLSX.WorkSheet,
   address: string,

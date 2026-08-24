@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useAppState } from '../state/AppContext'
 import { useWorkspace } from '../state/WorkspaceContext'
 import type { PerformanceGrade } from '../types'
-import { downloadMemberPeerReviewTemplates, parseProjectPeerReviewWorkbook } from '../utils/excel'
+import { downloadMemberPeerReviewTemplates, parseIntegratedPeerReviewWorkbook, parseProjectPeerReviewWorkbook } from '../utils/excel'
 import { mergePeerReviews } from '../utils/peerReview'
 import { evaluationPeriodFolderName, formatEvaluationPeriod } from '../utils/workspace'
 import Badge from './Badge'
@@ -73,10 +73,24 @@ export default function PeerReviewSection() {
     for (const file of Array.from(files)) {
       if (!/\.xlsx?$/i.test(file.name)) { invalidFiles += 1; continue }
       try {
-        const result = parseProjectPeerReviewWorkbook(await file.arrayBuffer(), project.id, state.tasks, state.members, state.contributions, state.criteria.personalGradeWeight > 0, formatEvaluationPeriod(project.period))
-        if (result.reviews.length === 0) invalidFiles += 1
-        else { merged = mergePeerReviews(merged, result.reviews); validFiles += 1 }
-        if (result.errors.length > 0) issues.push(`${file.name}: ${result.errors.slice(0, 2).join(' ')}`)
+        const buffer = await file.arrayBuffer()
+        const result = parseProjectPeerReviewWorkbook(buffer, project.id, state.tasks, state.members, state.contributions, state.criteria.personalGradeWeight > 0, formatEvaluationPeriod(project.period))
+        if (result.reviews.length > 0) {
+          merged = mergePeerReviews(merged, result.reviews)
+          validFiles += 1
+          if (result.errors.length > 0) issues.push(`${file.name}: ${result.errors.slice(0, 2).join(' ')}`)
+        } else {
+          const integrated = parseIntegratedPeerReviewWorkbook(buffer, state.tasks, state.members)
+          if (integrated.reviews.length === 0) {
+            invalidFiles += 1
+            const errors = integrated.errors.length > 0 ? integrated.errors : result.errors
+            if (errors.length > 0) issues.push(`${file.name}: ${errors.slice(0, 2).join(' ')}`)
+          } else {
+            merged = mergePeerReviews(merged, integrated.reviews)
+            validFiles += 1
+            if (integrated.errors.length > 0) issues.push(`${file.name}: ${integrated.errors.slice(0, 2).join(' ')}`)
+          }
+        }
       } catch { invalidFiles += 1; issues.push(`${file.name}: 파일을 읽을 수 없습니다.`) }
     }
     if (validFiles > 0) {
@@ -143,7 +157,7 @@ export default function PeerReviewSection() {
       </> : <div className="space-y-8">
         <FileDropZone
           title="피어리뷰 결과 파일을 여기에 드래그"
-          description="팀원별 Excel 파일 여러 개를 한 번에 업로드할 수 있습니다. 현재 평가기간과 일치하는 파일만 반영됩니다."
+          description="팀원별 결과 파일 또는 통합 피어리뷰 Excel을 한 번에 업로드할 수 있습니다. 현재 과제·팀원과 일치하는 값만 반영됩니다."
           disabled={!ready}
           onClick={() => inputRef.current?.click()}
           onDrop={(event) => { event.preventDefault(); void upload(event.dataTransfer.files) }}
