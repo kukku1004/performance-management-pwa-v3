@@ -6,6 +6,7 @@ import ConfirmDialog from './ConfirmDialog'
 import ImportFeedback from './ImportFeedback'
 import Badge from './Badge'
 import SectionHeader from './SectionHeader'
+import FileDropZone from './FileDropZone'
 import { downloadTaskTemplate, parseTaskWorkbook, type TaskImportResult } from '../utils/excel'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
 
@@ -15,6 +16,7 @@ export default function TaskManagement() {
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [deletingTask, setDeletingTask] = useState<Task | null>(null)
   const [importResult, setImportResult] = useState<TaskImportResult | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -45,15 +47,20 @@ export default function TaskManagement() {
     }
   }
 
-  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  async function importTaskFile(file: File | undefined) {
     if (!file) return
     const buffer = await file.arrayBuffer()
     const result = parseTaskWorkbook(buffer, state.tasks)
     dispatch({ type: 'IMPORT_TASKS', payload: result.tasks })
     setImportResult(result)
     setRecentlyAddedIds(new Set(result.addedIds))
+    setUploadOpen(false)
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    await importTaskFile(file)
   }
 
   return (
@@ -77,7 +84,9 @@ export default function TaskManagement() {
           엑셀 양식 다운로드
         </button>
         <button
-          onClick={() => fileInputRef.current?.click()}
+          type="button"
+          aria-expanded={uploadOpen}
+          onClick={() => setUploadOpen((open) => !open)}
           className="ui-button ui-button-secondary"
         >
           엑셀로 업로드
@@ -89,10 +98,14 @@ export default function TaskManagement() {
           className="hidden"
           onChange={handleFileSelected}
         />
-        <span className="text-sm text-gray-500">
-          과제명, 과제등급(중점/핵심/일반/지원), 업무량(대/중/소), 목표, 성과, 성과등급(S/A/B/C/D) 컬럼을 포함한 엑셀 파일을 업로드하세요.
-        </span>
       </div>
+
+      {uploadOpen && <FileDropZone
+        title="과제 Excel 파일을 여기에 드래그"
+        description="과제명·과제등급·업무량·목표·성과·성과등급을 현재 평가에 반영합니다."
+        onClick={() => fileInputRef.current?.click()}
+        onDrop={(event) => { event.preventDefault(); void importTaskFile(event.dataTransfer.files[0]) }}
+      />}
 
       {importResult && (
         <ImportFeedback

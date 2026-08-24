@@ -15,6 +15,7 @@ export default function PeerReviewSection() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [generatedMembers, setGeneratedMembers] = useState<string[]>([])
   const [uploadMessage, setUploadMessage] = useState('')
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [activeView, setActiveView] = useState<'templates' | 'received'>('templates')
   const [selectedTaskId, setSelectedTaskId] = useState('')
   const [selectedReviewerId, setSelectedReviewerId] = useState('')
@@ -96,6 +97,7 @@ export default function PeerReviewSection() {
     if (validFiles > 0) {
       dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: merged })
       setActiveView('received')
+      setUploadOpen(false)
     }
     setUploadMessage(`${files.length}개 중 ${validFiles}개 반영${invalidFiles ? ` / ${invalidFiles}개 확인 필요` : ''}${issues.length ? ` · ${issues.join(' · ')}` : ''}`)
   }
@@ -139,11 +141,11 @@ export default function PeerReviewSection() {
     <section className="mb-4 space-y-5 py-1">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3"><h3 className="ui-section-title">피어리뷰</h3><Badge tone={status === '수집 완료' ? 'success' : 'neutral'}>{status}</Badge><span className="text-sm text-gray-500">{submittedCount} / {expectedCount}명 제출</span></div>
-        <div className="flex gap-2"><button type="button" disabled={!ready} onClick={() => setDialogOpen(true)} className="ui-button ui-button-primary">팀원별 양식 만들기</button><button type="button" onClick={() => inputRef.current?.click()} className="ui-button ui-button-secondary">결과 업로드</button><input ref={inputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { void upload(event.target.files); event.target.value = '' }} /></div>
+        <div className="flex gap-2"><button type="button" disabled={!ready} onClick={() => setDialogOpen(true)} className="ui-button ui-button-primary">팀원별 양식 만들기</button><button type="button" aria-expanded={uploadOpen} onClick={() => { setActiveView('received'); setUploadOpen((open) => !open) }} className="ui-button ui-button-secondary">결과 업로드</button><input ref={inputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { void upload(event.target.files); event.target.value = '' }} /></div>
       </div>
 
       <div className="flex border-b border-gray-200" role="tablist" aria-label="피어리뷰 관리 구분">
-        <button type="button" role="tab" aria-selected={activeView === 'templates'} onClick={() => setActiveView('templates')} className={`border-b-2 px-4 py-2.5 text-sm font-semibold ${activeView === 'templates' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-900'}`}>양식 배포</button>
+        <button type="button" role="tab" aria-selected={activeView === 'templates'} onClick={() => { setActiveView('templates'); setUploadOpen(false) }} className={`border-b-2 px-4 py-2.5 text-sm font-semibold ${activeView === 'templates' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-900'}`}>양식 배포</button>
         <button type="button" role="tab" aria-selected={activeView === 'received'} onClick={() => setActiveView('received')} className={`border-b-2 px-4 py-2.5 text-sm font-semibold ${activeView === 'received' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-900'}`}>받은 리뷰 <span className="ml-1 text-xs font-medium text-gray-400">{state.peerReviews.length}</span></button>
       </div>
 
@@ -155,13 +157,13 @@ export default function PeerReviewSection() {
       {generatedMembers.length > 0 && <p className="text-sm text-success">팀원별 양식 {generatedMembers.length}개가 생성되었습니다. 다운로드된 파일을 각 팀원에게 배포하세요.</p>}
       {uploadMessage && <p className="text-sm text-gray-600">{uploadMessage}</p>}
       </> : <div className="space-y-8">
-        <FileDropZone
+        {uploadOpen && <FileDropZone
           title="피어리뷰 결과 파일을 여기에 드래그"
           description="팀원별 결과 파일 또는 통합 피어리뷰 Excel을 한 번에 업로드할 수 있습니다. 현재 과제·팀원과 일치하는 값만 반영됩니다."
           disabled={!ready}
           onClick={() => inputRef.current?.click()}
           onDrop={(event) => { event.preventDefault(); void upload(event.dataTransfer.files) }}
-        />
+        />}
         {state.peerReviews.length === 0 ? <div className="ui-empty"><p>아직 업로드된 피어리뷰가 없습니다.</p></div> : <>
           <section className="rounded-lg border border-gray-200 bg-white p-4">
             <div><h4 className="text-sm font-semibold text-gray-950">받은 내용 확인·조정</h4><p className="mt-1 text-xs text-gray-500">업로드된 값을 과제와 리뷰어별로 확인하고 필요한 값만 수정합니다.</p></div>

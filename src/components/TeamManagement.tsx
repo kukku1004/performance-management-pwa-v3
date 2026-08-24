@@ -10,6 +10,7 @@ import Badge from './Badge'
 import SectionHeader from './SectionHeader'
 import PeerReviewSection from './PeerReviewSection'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
+import FileDropZone from './FileDropZone'
 import { useWorkspace } from '../state/WorkspaceContext'
 
 export default function TeamManagement() {
@@ -19,6 +20,7 @@ export default function TeamManagement() {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [deletingMember, setDeletingMember] = useState<TeamMember | null>(null)
   const [importResult, setImportResult] = useState<MemberImportResult | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
   const [activeView, setActiveView] = useState<'members' | 'peer'>('members')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -54,15 +56,20 @@ export default function TeamManagement() {
     dispatch({ type: 'UPDATE_MEMBER', payload: { ...member, active: !member.active } })
   }
 
-  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  async function importMemberFile(file: File | undefined) {
     if (!file) return
     const buffer = await file.arrayBuffer()
     const result = parseMemberWorkbook(buffer, state.members)
     dispatch({ type: 'IMPORT_MEMBERS', payload: result.members })
     setImportResult(result)
     setRecentlyAddedIds(new Set(result.addedIds))
+    setUploadOpen(false)
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    await importMemberFile(file)
   }
 
   return (
@@ -93,7 +100,9 @@ export default function TeamManagement() {
           엑셀 양식 다운로드
         </button>
         <button
-          onClick={() => fileInputRef.current?.click()}
+          type="button"
+          aria-expanded={uploadOpen}
+          onClick={() => setUploadOpen((open) => !open)}
           className="ui-button ui-button-secondary"
         >
           엑셀로 업로드
@@ -105,10 +114,14 @@ export default function TeamManagement() {
           className="hidden"
           onChange={handleFileSelected}
         />
-        <span className="text-sm text-gray-500">
-          이름, 직책(팀장/PM/PL), 직급(사원/대리/과장/차장), 연차, 역할, 코멘트 컬럼을 포함한 엑셀 파일을 업로드하세요.
-        </span>
       </div>
+
+      {uploadOpen && <FileDropZone
+        title="팀원 Excel 파일을 여기에 드래그"
+        description="이름·직책·직급·연차·역할·코멘트를 현재 평가의 팀원 정보에 반영합니다."
+        onClick={() => fileInputRef.current?.click()}
+        onDrop={(event) => { event.preventDefault(); void importMemberFile(event.dataTransfer.files[0]) }}
+      />}
 
       {importResult && (
         <ImportFeedback

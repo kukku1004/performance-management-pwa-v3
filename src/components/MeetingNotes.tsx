@@ -13,6 +13,7 @@ import { downloadGrowthHistoryTemplate, parseGrowthHistoryWorkbook } from '../ut
 import ExpandCollapseIcon from './ExpandCollapseIcon'
 import DisclosureIcon from './DisclosureIcon'
 import MeetingNotesFocusPreview from './MeetingNotesFocusPreview'
+import FileDropZone from './FileDropZone'
 
 function todayString() {
   return new Date().toISOString().slice(0, 10)
@@ -50,6 +51,7 @@ export default function MeetingNotes() {
   const [deletingNote, setDeletingNote] = useState<MeetingNote | null>(null)
 
   const [growthImportMessage, setGrowthImportMessage] = useState('')
+  const [growthUploadOpen, setGrowthUploadOpen] = useState(false)
   const growthFileInputRef = useRef<HTMLInputElement>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const [leftWidth, setLeftWidth] = useState(440)
@@ -171,14 +173,19 @@ export default function MeetingNotes() {
     }
   }
 
-  async function handleGrowthFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  async function importGrowthFile(file: File | undefined) {
     if (!file || !activeTeam) return
     const result = parseGrowthHistoryWorkbook(await file.arrayBuffer(), members, activeTeam.growthProfiles)
     result.profiles.forEach((profile) => saveGrowthProfile(profile))
     const success = result.importedMembers.length > 0 ? `${result.importedMembers.length}명 성과 이력 반영: ${result.importedMembers.join(', ')}` : ''
     setGrowthImportMessage([success, ...result.errors].filter(Boolean).join(' · ') || '반영된 이력이 없습니다.')
+    setGrowthUploadOpen(false)
+  }
+
+  async function handleGrowthFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    await importGrowthFile(file)
   }
 
   function renderHistoryItem(note: MeetingNote, index: number) {
@@ -231,7 +238,14 @@ export default function MeetingNotes() {
                   </span> })()}
                 </button>
               ))}
-          </div><div className="flex shrink-0 items-center gap-2 pb-1 pl-3"><span className="max-w-56 truncate text-xs text-gray-500" title={growthImportMessage}>{growthImportMessage}</span><input ref={growthFileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleGrowthFileSelected} /><button type="button" onClick={() => { void downloadGrowthHistoryTemplate(members, activeTeam?.growthProfiles ?? []) }} className="ui-button ui-button-ghost ui-button-sm">입력 양식</button><button type="button" onClick={() => growthFileInputRef.current?.click()} className="ui-button ui-button-secondary ui-button-sm"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M12 16V4M7 9l5-5 5 5M5 14v6h14v-6"/></svg>성과 가져오기</button></div></div>
+          </div><div className="flex shrink-0 items-center gap-2 pb-1 pl-3"><span className="max-w-56 truncate text-xs text-gray-500" title={growthImportMessage}>{growthImportMessage}</span><input ref={growthFileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleGrowthFileSelected} /><button type="button" onClick={() => { void downloadGrowthHistoryTemplate(members, activeTeam?.growthProfiles ?? []) }} className="ui-button ui-button-ghost ui-button-sm">입력 양식</button><button type="button" aria-expanded={growthUploadOpen} onClick={() => setGrowthUploadOpen((open) => !open)} className="ui-button ui-button-secondary ui-button-sm"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M12 16V4M7 9l5-5 5 5M5 14v6h14v-6"/></svg>성과 가져오기</button></div></div>
+          {growthUploadOpen && <FileDropZone
+            className="my-3"
+            title="성과 Excel 파일을 여기에 드래그"
+            description="팀원별 이전 성과 이력을 가져와 성장·승진 시뮬레이션에 반영합니다."
+            onClick={() => growthFileInputRef.current?.click()}
+            onDrop={(event) => { event.preventDefault(); void importGrowthFile(event.dataTransfer.files[0]) }}
+          />}
           <div
             ref={workspaceRef}
             className="grid h-[calc(100vh-10rem)] min-h-[620px] items-stretch overflow-hidden"
