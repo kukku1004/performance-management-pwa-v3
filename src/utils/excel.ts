@@ -14,7 +14,7 @@ import type {
   Workload,
 } from '../types'
 import { IMPORTANCE_OPTIONS, LEVEL_OPTIONS, PERFORMANCE_GRADE_OPTIONS, POSITION_OPTIONS, WORKLOAD_OPTIONS } from '../types'
-import { calcAllTaskScores, calcMemberResults } from './calculations'
+import { calcAllTaskScores, calcMemberResults, calcPersonalGradeFactor } from './calculations'
 
 // Claude's Artifact preview blocks raw browser downloads and only allows
 // files to leave the frame through window.claude.downloads.save(), which
@@ -802,7 +802,7 @@ export async function downloadResultsReport(
   const taskScoreMap = new Map(taskScores.map((row) => [row.task.id, row.score]))
 
   const rankRows = [
-    ['순위', '이름', '역할', '직책', '직급', '참여 과제 수', '종합 점수(가중평균)', '누적 점수(단순합)'],
+    ['순위', '이름', '역할', '직책', '직급', '참여 과제 수', '성과점수', '누적 점수(개인점수 합)'],
     ...results.map((row, index) => [
       index + 1,
       row.member.name,
@@ -810,7 +810,7 @@ export async function downloadResultsReport(
       row.member.position || '-',
       row.member.level || '-',
       row.participatedTaskCount,
-      Number(row.weightedAverageScore.toFixed(1)),
+      Number(row.performanceScore.toFixed(1)),
       Number(row.cumulativeScore.toFixed(1)),
     ]),
   ]
@@ -827,7 +827,7 @@ export async function downloadResultsReport(
   ]
 
   const detailRows: (string | number)[][] = [
-    ['팀원', '과제명', '과제점수', '기여도(%)', '개인수행등급', '목표', '성과', '성과등급', '가중점수', '기여도합계 100% 여부'],
+    ['팀원', '과제명', '과제점수', '기여도(%)', '개인수행등급', '목표', '성과', '성과등급', '개인점수', '기여도합계 100% 여부'],
   ]
   for (const task of tasks) {
     const taskScore = taskScoreMap.get(task.id) ?? 0
@@ -838,7 +838,7 @@ export async function downloadResultsReport(
       const member = members.find((m) => m.id === c.memberId)
       if (!member) continue
       const personalFactor = criteria.personalGradeWeight > 0 ? c.personalPerformanceGrade : '미사용'
-      const weighted = taskScore * (c.contributionPercent / 100)
+      const personalScore = taskScore * (c.contributionPercent / 100) * calcPersonalGradeFactor(c, criteria)
       detailRows.push([
         member.name,
         task.name,
@@ -848,7 +848,7 @@ export async function downloadResultsReport(
         task.objective || '-',
         task.achievement || '-',
         task.performanceGrade,
-        Number(weighted.toFixed(1)),
+        Number(personalScore.toFixed(1)),
         sumOk,
       ])
     }

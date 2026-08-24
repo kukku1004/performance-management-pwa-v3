@@ -33,7 +33,7 @@ export function getMemberEvaluationHistory(
         projectId: project.id,
         label: formatEvaluationPeriod(project.period),
         year: project.period.year,
-        score: result.weightedAverageScore,
+        score: result.performanceScore,
         grade: result.grade,
         createdAt: project.createdAt,
       }]

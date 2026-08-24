@@ -62,9 +62,9 @@ export default function EvaluationResults() {
 
     return [...filtered].sort((a, b) => {
       if (sortKey === 'name') return a.member.name.localeCompare(b.member.name, 'ko-KR')
-      if (sortKey === 'score-asc') return a.weightedAverageScore - b.weightedAverageScore
+      if (sortKey === 'score-asc') return a.performanceScore - b.performanceScore
       if (sortKey === 'grade') return GRADE_ORDER[a.grade] - GRADE_ORDER[b.grade]
-      return b.weightedAverageScore - a.weightedAverageScore
+      return b.performanceScore - a.performanceScore
     })
   }, [gradeFilter, levelFilter, memberResults, searchQuery, sortKey])
 
@@ -181,7 +181,7 @@ export default function EvaluationResults() {
                       </td>
                       <td>{row.member.level || '-'}</td>
                       <td className="text-right font-semibold tabular-nums text-gray-950">
-                        {row.weightedAverageScore.toFixed(1)}
+                        {row.performanceScore.toFixed(1)}
                       </td>
                       <td className="text-center">
                         <Badge tone={GRADE_TONES[row.grade]}>{row.grade}</Badge>

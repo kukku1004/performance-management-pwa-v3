@@ -106,8 +106,8 @@ export function isContributionSumValid(sum: number): boolean {
 export interface MemberResultRow {
   member: TeamMember
   participatedTaskCount: number
+  performanceScore: number
   cumulativeScore: number
-  weightedAverageScore: number
   expectedScore: number
   ratio: number
   grade: EvaluationGrade
@@ -147,6 +147,19 @@ export function calcMemberCumulativeScore(
     const personalFactor = calcPersonalGradeFactor(contribution, criteria)
     return sum + row.score * contributionFactor * personalFactor
   }, 0)
+}
+
+export function calcMemberPerformanceScore(
+  member: TeamMember,
+  taskScores: TaskScoreRow[],
+  contributions: Contribution[],
+  criteria: Criteria,
+  peerReviews: PeerReview[] = [],
+): number {
+  // A contribution is scoped to its own task. Do not divide this sum by the
+  // member's contribution total across unrelated tasks.
+  const personalScoreSum = calcMemberCumulativeScore(member, taskScores, contributions, criteria)
+  return personalScoreSum * calcPeerReviewFactor(peerReviews, member.id, criteria)
 }
 
 export function calcPeerReviewFactor(
@@ -203,38 +216,37 @@ export function calcMemberResults(
 ): MemberResultRow[] {
   const taskScores = calcAllTaskScores(tasks, criteria)
 
-  const withCumulativeScore = members
+  const withPerformanceScore = members
     .filter((m) => m.active)
     .map((member) => {
-      const rawCumulativeScore = calcMemberCumulativeScore(member, taskScores, contributions, criteria)
-      const cumulativeScore = rawCumulativeScore * calcPeerReviewFactor(peerReviews, member.id, criteria)
-      const { count, totalShare } = calcMemberParticipation(member, tasks, contributions, criteria)
-      return { member, cumulativeScore, participatedTaskCount: count, totalShare }
+      const performanceScore = calcMemberPerformanceScore(member, taskScores, contributions, criteria, peerReviews)
+      const { count } = calcMemberParticipation(member, tasks, contributions, criteria)
+      return {
+        member,
+        performanceScore,
+        cumulativeScore: performanceScore,
+        participatedTaskCount: count,
+      }
     })
 
-  const expectedScore = calcExpectedScore(withCumulativeScore.map((r) => r.cumulativeScore))
+  const expectedScore = calcExpectedScore(withPerformanceScore.map((row) => row.performanceScore))
 
-  const scoredRows = withCumulativeScore.map((row) => ({
-    ...row,
-    weightedAverageScore: row.totalShare > 0 ? row.cumulativeScore / row.totalShare : 0,
-  }))
-
-  const rows = scoredRows.map(({ member, cumulativeScore, participatedTaskCount, weightedAverageScore }) => {
-    const ratio = expectedScore > 0 ? cumulativeScore / expectedScore : 0
-    const greaterCount = scoredRows.filter((row) => row.weightedAverageScore > weightedAverageScore).length
-    const rankPercent = scoredRows.length > 0 ? (greaterCount / scoredRows.length) * 100 : 100
+  const rows = withPerformanceScore.map(({ member, performanceScore, cumulativeScore, participatedTaskCount }) => {
+    const ratio = expectedScore > 0 ? performanceScore / expectedScore : 0
+    const greaterCount = withPerformanceScore.filter((row) => row.performanceScore > performanceScore).length
+    const rankPercent = withPerformanceScore.length > 0 ? (greaterCount / withPerformanceScore.length) * 100 : 100
     return {
       member,
       participatedTaskCount,
+      performanceScore,
       cumulativeScore,
-      weightedAverageScore,
       expectedScore,
       ratio,
       grade: calcEvaluationGrade(rankPercent, criteria),
     }
   })
 
-  return rows.sort((a, b) => b.weightedAverageScore - a.weightedAverageScore)
+  return rows.sort((a, b) => b.performanceScore - a.performanceScore)
 }
 
 export const GRADE_COLORS: Record<EvaluationGrade, string> = {

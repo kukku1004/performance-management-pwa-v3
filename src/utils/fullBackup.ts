@@ -99,7 +99,7 @@ export function createFullBackupWorkbook(state: AppState, periodName: string): X
         row.member.position || '-',
         row.member.role || '-',
         row.participatedTaskCount,
-        Number(row.weightedAverageScore.toFixed(1)),
+        Number(row.performanceScore.toFixed(1)),
         Number(row.cumulativeScore.toFixed(1)),
         row.grade,
       ]),
