@@ -7,6 +7,7 @@ import { downloadMemberPeerReviewTemplates, parseProjectPeerReviewWorkbook } fro
 import { mergePeerReviews } from '../utils/peerReview'
 import { evaluationPeriodFolderName, formatEvaluationPeriod } from '../utils/workspace'
 import Badge from './Badge'
+import FileDropZone from './FileDropZone'
 
 export default function PeerReviewSection() {
   const { state, dispatch } = useAppState()
@@ -63,7 +64,7 @@ export default function PeerReviewSection() {
     setGeneratedMembers(generated)
   }
 
-  async function upload(files: FileList | null) {
+  async function upload(files: FileList | File[] | null) {
     if (!files?.length) return
     let merged = state.peerReviews
     let validFiles = 0
@@ -140,7 +141,14 @@ export default function PeerReviewSection() {
       {generatedMembers.length > 0 && <p className="text-sm text-success">팀원별 양식 {generatedMembers.length}개가 생성되었습니다. 다운로드된 파일을 각 팀원에게 배포하세요.</p>}
       {uploadMessage && <p className="text-sm text-gray-600">{uploadMessage}</p>}
       </> : <div className="space-y-8">
-        {state.peerReviews.length === 0 ? <div className="ui-empty"><p>아직 업로드된 피어리뷰가 없습니다.</p><button type="button" onClick={() => inputRef.current?.click()} className="ui-button ui-button-secondary mt-4">받은 결과 업로드</button></div> : <>
+        <FileDropZone
+          title="피어리뷰 결과 파일을 여기에 드래그"
+          description="팀원별 Excel 파일 여러 개를 한 번에 업로드할 수 있습니다. 현재 평가기간과 일치하는 파일만 반영됩니다."
+          disabled={!ready}
+          onClick={() => inputRef.current?.click()}
+          onDrop={(event) => { event.preventDefault(); void upload(event.dataTransfer.files) }}
+        />
+        {state.peerReviews.length === 0 ? <div className="ui-empty"><p>아직 업로드된 피어리뷰가 없습니다.</p></div> : <>
           <section className="rounded-lg border border-gray-200 bg-white p-4">
             <div><h4 className="text-sm font-semibold text-gray-950">받은 내용 확인·조정</h4><p className="mt-1 text-xs text-gray-500">업로드된 값을 과제와 리뷰어별로 확인하고 필요한 값만 수정합니다.</p></div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">

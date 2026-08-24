@@ -68,8 +68,8 @@ export default function EvaluationMatrix() {
 
   return (
     <CriteriaWorkspaceLayout>
-    <div className="ui-page">
-      <SectionHeader title="평가 매트릭스" description={
+    <div className="space-y-3">
+      <SectionHeader compact title="평가 매트릭스" description={
       <>
         과제(행) × 팀원(열)로 기여도와 개인수행등급을 입력하세요. 참여하지 않은 칸은 비워두면 됩니다.{' '}
         사용 중인 기준만 입력하고, 피어리뷰 추천값은 검토 후 선택적으로 적용하세요. 과제별 기여도 합계는 100%로 맞춰야 합니다.
