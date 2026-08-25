@@ -65,6 +65,8 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
   const [message, setMessage] = useState('')
   const nameInputRef = useRef<HTMLInputElement>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
+  const isNameComposingRef = useRef(false)
+  const submitAfterCompositionRef = useRef(false)
 
   if (!open) return null
 
@@ -76,12 +78,31 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
     window.requestAnimationFrame(() => nameInputRef.current?.focus())
   }
 
-  function addDraft() {
-    const names = namesFromText(draftInput)
+  function addDraft(value = draftInput) {
+    const names = namesFromText(value)
     if (names.length === 0) return
     if (directTarget === 'tasks') setTaskDrafts((current) => mergeNames(current, names))
     else setMemberDrafts((current) => mergeNames(current, names))
     setDraftInput('')
+  }
+
+  function handleNameCompositionEnd(event: React.CompositionEvent<HTMLInputElement>) {
+    isNameComposingRef.current = false
+    const composedValue = event.currentTarget.value
+    setDraftInput(composedValue)
+    if (!submitAfterCompositionRef.current) return
+    submitAfterCompositionRef.current = false
+    window.requestAnimationFrame(() => addDraft(composedValue))
+  }
+
+  function handleNameKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') return
+    if (event.nativeEvent.isComposing || isNameComposingRef.current || event.keyCode === 229) {
+      submitAfterCompositionRef.current = true
+      return
+    }
+    event.preventDefault()
+    addDraft()
   }
 
   function addNames() {
@@ -314,7 +335,9 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
                 ref={nameInputRef}
                 value={draftInput}
                 onChange={(event) => setDraftInput(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addDraft() } }}
+                onCompositionStart={() => { isNameComposingRef.current = true }}
+                onCompositionEnd={handleNameCompositionEnd}
+                onKeyDown={handleNameKeyDown}
                 placeholder={`${directTarget === 'tasks' ? '과제명' : '팀원명'}을 입력하고 Enter (예: ${directTarget === 'tasks' ? '신규 랜딩페이지 제작' : '김민준'})`}
                 className="ui-field !h-10"
                 autoFocus
