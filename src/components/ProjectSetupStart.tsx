@@ -288,7 +288,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
   return (
     <div className="ui-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="quick-start-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div className="ui-modal-panel flex h-[min(680px,calc(100vh-2rem))] max-w-3xl flex-col overflow-hidden">
+      <div className="ui-modal-panel flex max-h-[calc(100dvh-2rem)] max-w-5xl flex-col overflow-hidden">
         <div className="flex shrink-0 items-start justify-between gap-4 pb-3">
           <div><h2 id="quick-start-title" className="text-lg font-semibold leading-6 text-gray-950">빠른 시작</h2><p className="mt-1 text-sm text-gray-500">과제와 팀원을 빠르게 준비합니다. 닫으면 기존 화면에서 각각 입력할 수 있습니다.</p></div>
           <ModalCloseButton onClick={onClose} label="빠른 시작 닫기" />
@@ -303,7 +303,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
           ))}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pt-6">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 pt-5">
           {mode === 'direct' && <div>
             <div className="grid gap-3 sm:grid-cols-2">
               {renderDraftPanel('tasks', '과제', taskDrafts)}
@@ -325,51 +325,54 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
             </div>
           </div>}
 
-          {mode === 'excel' && <section>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="ui-section-title">양식 다운로드</h3>
-                <p className="mt-1 text-sm text-gray-500">필요한 양식을 각각 받거나 전체 파일을 ZIP으로 한 번에 받습니다.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => downloadQuickStartTemplateBundle(state.tasks, state.members, activeProject?.period.year)}
-                className="ui-button ui-button-primary shrink-0"
-              >전체 ZIP 다운로드</button>
-            </div>
-            <div className="mt-5 overflow-hidden rounded-lg border border-gray-200 bg-white">
-              {QUICK_START_TEMPLATES.map((template, index) => (
-                <div key={template.kind} className={`flex min-h-16 items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6.75 3.75h6.1L17.25 8v12.25H6.75z" />
-                      <path d="M12.75 3.75V8h4.5M9 12h6M9 15.5h6" />
-                    </svg>
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900">{template.label}</p>
-                    <p className="mt-0.5 truncate text-xs text-gray-400">{template.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => downloadQuickStartTemplateFile(template.kind, state.tasks, state.members, activeProject?.period.year)}
-                    className="ui-button ui-button-secondary ui-button-sm shrink-0"
-                  >다운로드</button>
+          {mode === 'excel' && <section className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:gap-0">
+            <div className="min-w-0 lg:pr-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="ui-section-title">양식 다운로드</h3>
+                  <p className="mt-1 text-sm text-gray-500">필요한 양식을 각각 받거나 ZIP으로 한 번에 받습니다.</p>
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => downloadQuickStartTemplateBundle(state.tasks, state.members, activeProject?.period.year)}
+                  className="ui-button ui-button-primary shrink-0"
+                >전체 ZIP 다운로드</button>
+              </div>
+              <div className="mt-4 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                {QUICK_START_TEMPLATES.map((template, index) => (
+                  <div key={template.kind} className={`flex min-h-14 items-center gap-3 px-4 py-2.5 ${index > 0 ? 'border-t border-gray-200' : ''}`}>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6.75 3.75h6.1L17.25 8v12.25H6.75z" />
+                        <path d="M12.75 3.75V8h4.5M9 12h6M9 15.5h6" />
+                      </svg>
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">{template.label}</p>
+                      <p className="mt-0.5 text-xs leading-5 text-gray-400">{template.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => downloadQuickStartTemplateFile(template.kind, state.tasks, state.members, activeProject?.period.year)}
+                      className="ui-button ui-button-secondary ui-button-sm shrink-0"
+                    >다운로드</button>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="mt-6 border-t border-gray-200 pt-5">
+            <div className="min-w-0 border-t border-gray-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <h3 className="ui-section-title">작성한 양식 업로드</h3>
-              <p className="mt-1 text-sm text-gray-500">과제·팀원·이전 성과·피어리뷰 파일을 함께 올리면 데이터 종류를 자동으로 구분합니다.</p>
+              <p className="mt-1 text-sm leading-6 text-gray-500">과제·팀원·이전 성과·피어리뷰 파일을 함께 올리면 데이터 종류를 자동으로 구분합니다.</p>
+              <FileDropZone
+                className="mt-4 min-h-56"
+                onClick={() => excelInputRef.current?.click()}
+                onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
+                title="작성한 양식 파일을 여기에 드래그"
+                description="여러 Excel 파일 동시 업로드 가능 (.xlsx)"
+              />
+              <p className="mt-3 text-xs leading-5 text-gray-400">드롭 영역을 누르면 파일 선택창이 열립니다.</p>
+              <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
             </div>
-            <FileDropZone
-              className="mt-5"
-              onClick={() => excelInputRef.current?.click()}
-              onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
-              title="작성한 양식 파일을 여기에 드래그"
-              description="여러 Excel 파일 동시 업로드 가능 (.xlsx)"
-            />
-            <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
           </section>}
 
           {mode === 'previous' && <section>
