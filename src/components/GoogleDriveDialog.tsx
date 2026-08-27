@@ -13,12 +13,8 @@ import {
   type SavedDriveBackup,
 } from '../utils/googleDrive'
 import Badge from './Badge'
-import FileDropZone from './FileDropZone'
 import ModalCloseButton from './ModalCloseButton'
-import { downloadFullBackup, downloadFullBackupJson, parseFullBackupJson } from '../utils/fullBackup'
-import { detectManagedWorkbookKind, parseMemberWorkbook, parseProjectPeerReviewWorkbook, parseTaskWorkbook } from '../utils/excel'
-import { syncAutoDistribution } from '../state/appReducer'
-import { mergePeerReviews } from '../utils/peerReview'
+import { backupToJsonBlob, createFullBackupEnvelope, createFullBackupWorkbook, downloadBlob, parseFullBackupJson, sanitizePeriodName, workbookToBlob } from '../utils/fullBackup'
 import ConfirmDialog from './ConfirmDialog'
 
 interface GoogleDriveDialogProps {
@@ -43,6 +39,11 @@ function hasWorkingData(state: AppState) {
   return state.tasks.length > 0 || state.members.length > 0 || state.contributions.length > 0
 }
 
+interface BackupDirectoryHandle {
+  name: string
+  getFileHandle: (name: string, options: { create: boolean }) => Promise<{ createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> }>
+}
+
 export default function GoogleDriveDialog({
   open,
   state,
@@ -52,20 +53,18 @@ export default function GoogleDriveDialog({
   onResetWorkspace,
   onClose,
   teamName,
-  projectId,
-  periodLabel,
 }: GoogleDriveDialogProps) {
   const [connected, setConnected] = useState(isGoogleDriveConnected())
   const [driveEmail, setDriveEmail] = useState(getConnectedGoogleAccount()?.email ?? '')
-  const [activeTab, setActiveTab] = useState<'local' | 'drive'>('local')
+  const [activeTab, setActiveTab] = useState<'local' | 'drive' | 'reset'>('local')
   const [saveMode, setSaveMode] = useState<'update' | 'version'>('update')
   const [backups, setBackups] = useState<SavedDriveBackup[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [resetOpen, setResetOpen] = useState(false)
+  const [backupDirectory, setBackupDirectory] = useState<BackupDirectoryHandle | null>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
-  const excelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) {
@@ -162,62 +161,71 @@ export default function GoogleDriveDialog({
     })
   }
 
-  async function handleBulkExcelUpload(files: FileList | null) {
-    if (!files?.length) return
-    await run(async () => {
-      const loaded = await Promise.all(Array.from(files).map(async (file) => ({ file, buffer: await file.arrayBuffer() })))
-      const categorized = loaded.map((item) => ({ ...item, kind: detectManagedWorkbookKind(item.buffer) }))
-      let nextState = state
-      const summaries: string[] = []
-      const issues: string[] = []
+  async function chooseBackupDirectory() {
+    const picker = (window as Window & { showDirectoryPicker?: () => Promise<BackupDirectoryHandle> }).showDirectoryPicker
+    if (!picker) {
+      setError('이 브라우저에서는 저장 폴더 선택을 지원하지 않습니다. 기본 다운로드 폴더에 저장됩니다.')
+      return
+    }
+    try {
+      const directory = await picker()
+      setBackupDirectory(directory)
+      setMessage(`저장 위치: ${directory.name}`)
+      setError('')
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === 'AbortError') return
+      setError(caught instanceof Error ? caught.message : '저장 위치를 선택하지 못했습니다.')
+    }
+  }
 
-      for (const item of categorized.filter(({ kind }) => kind === 'tasks')) {
-        const result = parseTaskWorkbook(item.buffer, nextState.tasks)
-        nextState = { ...nextState, tasks: result.tasks, contributions: syncAutoDistribution(result.tasks, nextState.members, nextState.contributions) }
-        summaries.push(`과제 ${result.importedCount}건`)
-        issues.push(...result.errors.map((error) => `${item.file.name}: ${error}`))
-      }
-      for (const item of categorized.filter(({ kind }) => kind === 'members')) {
-        const result = parseMemberWorkbook(item.buffer, nextState.members)
-        nextState = { ...nextState, members: result.members, contributions: syncAutoDistribution(nextState.tasks, result.members, nextState.contributions) }
-        summaries.push(`팀원 ${result.importedCount}건`)
-        issues.push(...result.errors.map((error) => `${item.file.name}: ${error}`))
-      }
-      for (const item of categorized.filter(({ kind }) => kind === 'peerReviews')) {
-        const result = parseProjectPeerReviewWorkbook(item.buffer, projectId, nextState.tasks, nextState.members, nextState.contributions, nextState.criteria.personalGradeWeight > 0, periodLabel)
-        if (result.reviews.length > 0) nextState = { ...nextState, peerReviews: mergePeerReviews(nextState.peerReviews, result.reviews) }
-        summaries.push(`피어리뷰 ${result.reviews.length}건`)
-        issues.push(...result.errors.map((error) => `${item.file.name}: ${error}`))
-      }
-      const unknownFiles = categorized.filter(({ kind }) => kind === 'unknown').map(({ file }) => file.name)
-      issues.push(...unknownFiles.map((name) => `${name}: 지원하는 과제·팀원·피어리뷰 양식이 아닙니다.`))
-      if (summaries.length === 0) throw new Error(issues[0] ?? '반영할 수 있는 Excel 파일이 없습니다.')
-      onRestore(nextState)
-      setMessage(`${files.length}개 파일 처리 · ${summaries.join(' · ')}${issues.length ? ` · 확인 필요 ${issues.length}건` : ''}`)
-      if (issues.length) setError(issues.slice(0, 3).join(' / '))
-    })
+  async function saveLocalBackup(kind: 'json' | 'excel') {
+    const safePeriodName = sanitizePeriodName(periodName)
+    if (!safePeriodName) {
+      setError('평가기간명을 입력하세요.')
+      return
+    }
+    const filename = kind === 'json' ? `${safePeriodName}_성장관리_data.json` : `${safePeriodName}_성과관리.xlsx`
+    const blob = kind === 'json'
+      ? backupToJsonBlob(createFullBackupEnvelope(state, periodName.trim()))
+      : workbookToBlob(createFullBackupWorkbook(state, periodName.trim()))
+    if (!backupDirectory) {
+      downloadBlob(blob, filename)
+      setMessage(`${filename} 파일을 기본 다운로드 폴더에 저장했습니다.`)
+      return
+    }
+    try {
+      const file = await backupDirectory.getFileHandle(filename, { create: true })
+      const writable = await file.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      setMessage(`${backupDirectory.name}/${filename} 저장 완료`)
+      setError('')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '백업 파일을 저장하지 못했습니다.')
+    }
   }
 
   return (
     <div className="ui-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="drive-dialog-title">
-      <div className="ui-modal-panel flex h-[min(680px,calc(100vh-2rem))] max-w-3xl flex-col overflow-hidden">
+      <div className="ui-modal-panel flex h-[min(780px,calc(100vh-2rem))] max-w-5xl flex-col overflow-hidden">
         <div className="flex shrink-0 items-start justify-between gap-4">
           <div>
-            <h3 id="drive-dialog-title" className="ui-modal-title">데이터 관리</h3>
-            <p className="mt-1 text-sm text-gray-600">현재 평가 프로젝트의 전체 데이터를 내보내거나 백업·복원합니다.</p>
+            <h3 id="drive-dialog-title" className="ui-modal-title">데이터 백업</h3>
+            <p className="mt-1 text-sm text-gray-600">현재 평가 프로젝트의 전체 데이터를 백업하거나 이전 백업으로 복원합니다.</p>
           </div>
-          <ModalCloseButton onClick={onClose} label="데이터 관리 닫기" />
+          <ModalCloseButton onClick={onClose} label="데이터 백업 닫기" />
         </div>
 
-        <div className="mt-5 inline-flex w-fit shrink-0 rounded-lg border border-gray-200 bg-gray-100 p-1" role="tablist" aria-label="데이터 관리 방식">
-          <button type="button" role="tab" aria-selected={activeTab === 'local'} onClick={() => setActiveTab('local')} className={`inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition ${activeTab === 'local' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>
+        <div className="mt-5 flex shrink-0 items-center border-y border-gray-200 px-2" role="tablist" aria-label="데이터 백업 방식">
+          <button type="button" role="tab" aria-selected={activeTab === 'local'} onClick={() => setActiveTab('local')} className={`inline-flex h-[62px] items-center gap-2 border-b-2 px-4 text-sm font-medium transition ${activeTab === 'local' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             로컬 파일
           </button>
-          <button type="button" role="tab" aria-selected={activeTab === 'drive'} onClick={() => setActiveTab('drive')} className={`inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition ${activeTab === 'drive' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>
+          <button type="button" role="tab" aria-selected={activeTab === 'drive'} onClick={() => setActiveTab('drive')} className={`inline-flex h-[62px] items-center gap-2 border-b-2 px-4 text-sm font-medium transition ${activeTab === 'drive' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none"><path d="M8.2 4h5.1l6.2 10.7H14.4z" fill="#FBBC04"/><path d="M8.2 4 2.5 14l2.6 4.5L10.8 8.6z" fill="#0F9D58"/><path d="M5.1 18.5h11.5l2.9-3.8H8z" fill="#4285F4"/></svg>
             Google Drive
           </button>
+          <button type="button" role="tab" aria-selected={activeTab === 'reset'} onClick={() => setActiveTab('reset')} className={`ml-auto inline-flex h-[62px] items-center border-b-2 px-4 text-sm font-semibold transition ${activeTab === 'reset' ? 'border-red-500 text-[#c84b31]' : 'border-transparent text-gray-400 hover:text-[#c84b31]'}`}>데이터 초기화</button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -228,35 +236,13 @@ export default function GoogleDriveDialog({
         )}
 
         {activeTab === 'local' ? (
-          <div className="mt-5 grid gap-5 md:grid-cols-2">
-            <section className="space-y-4 border-r-0 border-gray-200 md:border-r md:pr-5">
-              <div><h4 className="ui-section-title">전체 데이터 내보내기</h4><p className="ui-section-description">Excel은 검토·보관용 문서이고 JSON은 앱 복원용 백업입니다.</p></div>
-              <div><label htmlFor="local-period-name" className="ui-label">평가기간명</label><input id="local-period-name" value={periodName} onChange={(event) => onPeriodNameChange(event.target.value)} className="ui-field" /></div>
-              <div className="flex flex-wrap gap-2"><button type="button" onClick={() => downloadFullBackup(state, periodName)} className="ui-button ui-button-primary">전체 Excel 다운로드</button><button type="button" onClick={() => downloadFullBackupJson(state, periodName)} className="ui-button ui-button-secondary">복원용 JSON 다운로드</button></div>
-              <p className="text-xs leading-5 text-gray-500">과제·팀원·기여도·수행평가·평가기준·성과결과를 현재 평가기간 기준으로 포함합니다.</p>
-              <div className="border-t border-red-200 pt-4">
-                <h4 className="ui-section-title text-red-700">데이터 초기화</h4>
-                <p className="mt-1 text-xs leading-5 text-red-600">위의 Excel과 JSON 백업을 먼저 내려받으세요. 이 브라우저의 V3 팀·평가 프로젝트·면담·성장·평가 데이터가 모두 삭제됩니다.</p>
-                <button type="button" onClick={() => setResetOpen(true)} className="ui-button ui-button-danger mt-3">브라우저 데이터 초기화</button>
-              </div>
-            </section>
-            <section className="space-y-4">
-              <div><h4 className="ui-section-title">Excel 일괄 업로드</h4><p className="ui-section-description">과제·팀원·피어리뷰 파일을 함께 선택하면 양식 종류를 자동 구분합니다.</p></div>
-              <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { void handleBulkExcelUpload(event.target.files); event.target.value = '' }} />
-              <button type="button" onClick={() => excelInputRef.current?.click()} disabled={busy} className="ui-button ui-button-primary">전체 일괄 업로드</button>
-              <FileDropZone
-                onClick={() => excelInputRef.current?.click()}
-                onDrop={(event) => { event.preventDefault(); void handleBulkExcelUpload(event.dataTransfer.files) }}
-                disabled={busy}
-                description="여러 파일 동시 업로드 가능 (.xlsx)"
-              />
-              <div className="border-t border-gray-200 pt-4"><h4 className="ui-section-title">JSON 백업 복원</h4><p className="ui-section-description">앱에서 내려받은 JSON으로 현재 프로젝트를 정확히 복원합니다.</p></div>
-              <input ref={restoreInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => { void handleLocalRestore(event.target.files?.[0]); event.target.value = '' }} />
-              <button type="button" onClick={() => restoreInputRef.current?.click()} disabled={busy} className="ui-button ui-button-secondary">JSON 백업 선택</button>
-              <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">현재 데이터: 과제 {state.tasks.length}개 · 팀원 {state.members.length}명 · 피어리뷰 {state.peerReviews.length}건</div>
-            </section>
+          <div className="mx-auto mt-5 w-full max-w-4xl space-y-4 px-1">
+            <section className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div><h4 className="ui-section-title">저장 위치</h4><p className="ui-section-description">{backupDirectory ? backupDirectory.name : '지정하지 않으면 브라우저 기본 다운로드 폴더에 저장됩니다.'}</p></div><button type="button" onClick={() => { void chooseBackupDirectory() }} className="ui-button ui-button-secondary">위치 지정</button></section>
+            <section className="space-y-4 rounded-lg border border-gray-200 p-4"><div><h4 className="ui-section-title">지금 데이터 백업</h4><p className="ui-section-description">현재 계정에 저장된 모든 팀·프로젝트 데이터를 파일로 내보냅니다.</p></div><div><label htmlFor="local-period-name" className="ui-label">평가기간명</label><input id="local-period-name" value={periodName} onChange={(event) => onPeriodNameChange(event.target.value)} className="ui-field" /></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => { void saveLocalBackup('json') }} className="ui-button ui-button-primary">로컬 파일로 백업 (JSON)</button><button type="button" onClick={() => { void saveLocalBackup('excel') }} className="ui-button ui-button-secondary">엑셀로 백업</button></div><p className="text-xs leading-5 text-gray-500">JSON은 그대로 복원할 수 있는 원본이고, Excel은 사람이 보기 좋은 사본입니다.</p></section>
+            <section className="space-y-3 rounded-lg border border-gray-200 p-4"><div><h4 className="ui-section-title">백업 파일 복원</h4><p className="ui-section-description">이 앱에서 내려받은 JSON 백업으로 현재 프로젝트를 복원합니다.</p></div><input ref={restoreInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => { void handleLocalRestore(event.target.files?.[0]); event.target.value = '' }} /><button type="button" onClick={() => restoreInputRef.current?.click()} disabled={busy} className="ui-button ui-button-secondary">JSON 백업 선택</button></section>
+            <div className="rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-600">현재 데이터: 과제 {state.tasks.length}개 · 팀원 {state.members.length}명 · 피어리뷰 {state.peerReviews.length}건</div>
           </div>
-        ) : <div className="mt-5">
+        ) : activeTab === 'drive' ? <div className="mx-auto mt-5 w-full max-w-4xl px-1">
           <div className="mb-5 flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-medium text-gray-800">{connected ? (driveEmail || 'Google Drive 연결됨') : '아직 연결되지 않음'}</span><Badge tone={connected ? 'success' : 'neutral'}>{connected ? '연결됨' : '미연결'}</Badge></div>
             <button type="button" onClick={handleConnect} disabled={busy || !isGoogleDriveConfigured()} className="ui-button ui-button-secondary ui-button-sm">{connected ? '다시 연결' : 'Drive 연결'}</button>
@@ -367,6 +353,13 @@ export default function GoogleDriveDialog({
           </section>
           </div>
           <section className="mt-5 border-t border-gray-200 pt-4"><div className="flex items-center justify-between gap-4"><div><h4 className="ui-section-title">저장된 파일 보기</h4><p className="ui-section-description">성장관리/{teamName ? `${teamName}/` : ''}{periodName} 폴더를 새 탭에서 엽니다.</p></div><button type="button" onClick={handleOpenFolder} disabled={busy || !connected} className="ui-button ui-button-secondary">이 평가의 Drive 폴더 확인</button></div></section>
+        </div> : <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 p-8">
+          <section className="rounded-xl border border-[#f3d0d0] bg-[#faf0f0] p-6">
+            <h4 className="text-base font-bold text-[#c84b31]">전체 데이터 초기화</h4>
+            <div className="mt-5 text-sm leading-6 text-gray-900"><p><strong className="text-[#c84b31]">이 브라우저에 저장된 모든 팀·프로젝트 데이터</strong><span className="text-[#c84b31]">가 삭제됩니다.</span></p><p className="text-[#c84b31]">(지금 열려 있는 프로젝트 하나가 아닙니다.)</p><p>브라우저 저장소만 지우므로 다른 기기나 브라우저의 데이터에는 영향이 없지만, 이 브라우저에서는 되돌릴 수 없습니다.</p><p className="text-[#c84b31]">아래에서 먼저 백업하세요.</p></div>
+            <div className="mt-5 border-t border-[#f3d0d0] pt-5"><div className="flex flex-wrap gap-3"><button type="button" onClick={() => { void saveLocalBackup('json') }} className="ui-button ui-button-secondary">로컬 파일로 백업 (JSON)</button><button type="button" onClick={() => { void saveLocalBackup('excel') }} className="ui-button ui-button-secondary">엑셀로 백업</button></div><p className="mt-4 text-xs leading-5 text-gray-600">JSON 백업은 그대로 복원할 수 있는 원본이고, Excel 백업은 사람이 보기 좋은 사본입니다(복원용 아님).</p></div>
+          </section>
+          <button type="button" onClick={() => setResetOpen(true)} className="ui-button ui-button-danger self-end px-6">전체 데이터 초기화</button>
         </div>}
 
         {(message || error) && <div className="mt-4 space-y-1 border-t border-gray-200 pt-3 text-sm">{message && <p className="text-success">{message}</p>}{error && <p className="text-danger">{error}</p>}</div>}

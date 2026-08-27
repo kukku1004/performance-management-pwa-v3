@@ -53,7 +53,7 @@ function ProjectCard({ project, onOpen, onEdit, onDelete }: { project: Evaluatio
 }
 
 export default function WorkspaceStart() {
-  const { workspace, connected, configured, account, connect, switchAccount, logout, createTeam, updateTeam, deleteTeam, createProject, selectProject, updateProjectPeriod, deleteProject } = useWorkspace()
+  const { workspace, connected, configured, account, rememberedAccount, connect, switchAccount, logout, createTeam, updateTeam, deleteTeam, createProject, selectProject, updateProjectPeriod, deleteProject } = useWorkspace()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [teamName, setTeamName] = useState('')
@@ -92,11 +92,11 @@ export default function WorkspaceStart() {
     if (!workspace.teams.some((team) => team.id === selectedTeamId)) setSelectedTeamId(workspace.teams[0]?.id ?? '')
   }, [selectedTeamId, workspace.teams])
 
-  async function handleConnect() {
+  async function handleConnect(accountMode: 'remembered' | 'default' = 'default') {
     setBusy(true)
     setError('')
     try {
-      await connect()
+      await connect(accountMode)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Google 로그인에 실패했습니다.')
     } finally {
@@ -221,9 +221,13 @@ export default function WorkspaceStart() {
           <section className="w-full border-y border-gray-200 bg-white py-12 text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-gray-950">성과·성장관리</h1>
             <p className="mt-3 text-sm leading-6 text-gray-600">팀과 평가기간별 데이터를 개인 Google Drive에서 안전하게 관리합니다.</p>
-            <button type="button" onClick={() => void handleConnect()} disabled={busy || !configured} className="ui-button ui-button-primary mt-7">
-              Google 계정으로 시작
-            </button>
+            <div className="mt-7 flex flex-col items-center gap-2">
+              <button type="button" onClick={() => void handleConnect(rememberedAccount ? 'remembered' : 'default')} disabled={busy || !configured} className="ui-button ui-button-primary min-w-56 justify-center">
+                {busy ? '연결 중…' : rememberedAccount ? `${rememberedAccount.email}로 계속` : 'Google 계정으로 시작'}
+              </button>
+              {rememberedAccount && <button type="button" onClick={() => void handleSwitchAccount()} disabled={busy || !configured} className="ui-button ui-button-ghost min-w-56 justify-center">다른 계정으로 로그인</button>}
+            </div>
+            <p className="mt-4 text-xs text-gray-500">연결 후에는 새로고침해도 로그인 상태가 유지됩니다.</p>
             {!configured && <p className="mt-4 text-xs text-amber-700">Google OAuth Client ID 설정이 필요합니다.</p>}
             {error && <p className="mt-4 text-sm text-danger">{error}</p>}
           </section>

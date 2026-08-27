@@ -4,6 +4,8 @@ import {
   connectGoogleDrive,
   disconnectGoogleDrive,
   getConnectedGoogleAccount,
+  getRememberedGoogleAccount,
+  hasGoogleDriveConnectionHint,
   isGoogleDriveConfigured,
   isGoogleDriveConnected,
   loadWorkspaceFromDrive,
@@ -42,10 +44,12 @@ interface WorkspaceContextValue {
   connected: boolean
   configured: boolean
   account: GoogleAccount | null
+  rememberedAccount: GoogleAccount | null
   activeProject: EvaluationProject | null
   activeTeam: Team | null
+  restoringConnection: boolean
   saveStatus: 'saved' | 'unsaved' | 'saving' | 'error'
-  connect: () => Promise<void>
+  connect: (accountMode?: 'remembered' | 'default') => Promise<void>
   switchAccount: () => Promise<void>
   logout: () => Promise<void>
   createTeam: (name: string) => Team
@@ -68,10 +72,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<WorkspaceState>(loadWorkspace)
   const [connected, setConnected] = useState(isGoogleDriveConnected())
   const [account, setAccount] = useState<GoogleAccount | null>(getConnectedGoogleAccount())
+  const [rememberedAccount, setRememberedAccount] = useState<GoogleAccount | null>(getRememberedGoogleAccount())
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved')
+  const [restoringConnection, setRestoringConnection] = useState(() => isGoogleDriveConfigured() && !isGoogleDriveConnected() && hasGoogleDriveConnectionHint())
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const workspaceRef = useRef(workspace)
   const changeVersionRef = useRef(0)
+  const restoreAttemptedRef = useRef(false)
   workspaceRef.current = workspace
 
   const markUnsaved = useCallback(() => {
@@ -79,6 +86,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setHasUnsavedChanges(true)
     setSaveStatus('unsaved')
   }, [])
+
+  useEffect(() => {
+    if (restoreAttemptedRef.current || !restoringConnection) return
+    restoreAttemptedRef.current = true
+    void connectGoogleDrive('')
+      .then(async () => {
+        const remote = await loadWorkspaceFromDrive()
+        if (remote) setWorkspace(remote)
+        setAccount(getConnectedGoogleAccount())
+        setConnected(true)
+        setHasUnsavedChanges(false)
+        setSaveStatus('saved')
+      })
+      .catch(() => setConnected(false))
+      .finally(() => setRestoringConnection(false))
+  }, [restoringConnection])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace))
@@ -98,11 +121,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer)
   }, [connected, hasUnsavedChanges, workspace])
 
-  const connect = useCallback(async () => {
-    await connectGoogleDrive()
+  const connect = useCallback(async (accountMode: 'remembered' | 'default' = 'default') => {
+    await connectGoogleDrive(accountMode === 'remembered' ? '' : 'consent', true)
     const remote = await loadWorkspaceFromDrive()
     if (remote) setWorkspace(remote)
-    setAccount(getConnectedGoogleAccount())
+    const nextAccount = getConnectedGoogleAccount()
+    setAccount(nextAccount)
+    setRememberedAccount(nextAccount)
     setConnected(true)
     setHasUnsavedChanges(false)
     setSaveStatus('saved')
@@ -110,12 +135,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const switchAccount = useCallback(async () => {
     if (connected) await saveWorkspaceToDrive({ ...workspaceRef.current, activeProjectId: null })
-    await connectGoogleDrive('select_account')
+    await connectGoogleDrive('select_account', true)
     const remote = await loadWorkspaceFromDrive()
     const nextWorkspace = remote ?? createEmptyWorkspace()
     workspaceRef.current = nextWorkspace
     setWorkspace(nextWorkspace)
     setAccount(getConnectedGoogleAccount())
+    setRememberedAccount(getConnectedGoogleAccount())
     setConnected(true)
     setHasUnsavedChanges(false)
     setSaveStatus('saved')
@@ -265,8 +291,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     connected,
     configured: isGoogleDriveConfigured(),
     account,
+    rememberedAccount,
     activeProject,
     activeTeam,
+    restoringConnection,
     saveStatus,
     connect,
     switchAccount,
@@ -283,7 +311,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     saveMeetingNote,
     deleteMeetingNote,
     saveGrowthProfile,
-  }), [account, activeProject, activeTeam, connect, connected, createProject, createTeam, deleteMeetingNote, deleteProject, deleteTeam, logout, resetWorkspace, saveGrowthProfile, saveMeetingNote, saveStatus, selectProject, switchAccount, updateProjectPeriod, updateProjectState, updateTeam, workspace])
+  }), [account, activeProject, activeTeam, connect, connected, createProject, createTeam, deleteMeetingNote, deleteProject, deleteTeam, logout, rememberedAccount, resetWorkspace, restoringConnection, saveGrowthProfile, saveMeetingNote, saveStatus, selectProject, switchAccount, updateProjectPeriod, updateProjectState, updateTeam, workspace])
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppState } from '../state/AppContext'
 import { syncAutoDistribution } from '../state/appReducer'
@@ -17,6 +17,7 @@ import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
+import Badge from './Badge'
 import ModalCloseButton from './ModalCloseButton'
 
 type StartMode = 'direct' | 'excel' | 'previous'
@@ -34,6 +35,27 @@ const QUICK_START_TEMPLATES: { kind: QuickStartTemplateKind; label: string; desc
 interface ProjectSetupStartProps {
   open: boolean
   onClose: () => void
+  onStartEvaluation?: () => void
+}
+
+type UploadResultStatus = 'success' | 'warning' | 'error'
+
+interface ExcelUploadResult {
+  id: string
+  name: string
+  details: string[]
+  errorCount: number
+  status: UploadResultStatus
+}
+
+interface ExcelUploadAccumulator {
+  id: string
+  name: string
+  taskCount: number
+  memberCount: number
+  growthMemberCount: number
+  peerReviewCount: number
+  errorCount: number
 }
 
 function namesFromText(value: string) {
@@ -49,7 +71,7 @@ function mergeNames(current: string[], additions: string[]) {
   return [...current, ...additions.filter((name) => !existing.has(normalizedName(name)))]
 }
 
-export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartProps) {
+export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: ProjectSetupStartProps) {
   const { state, dispatch } = useAppState()
   const { workspace, activeProject, activeTeam, saveGrowthProfile } = useWorkspace()
   const [mode, setMode] = useState<StartMode>('direct')
@@ -63,10 +85,18 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
   const [copyCriteria, setCopyCriteria] = useState(true)
   const [previousImportComplete, setPreviousImportComplete] = useState(false)
   const [message, setMessage] = useState('')
+  const [isImportingExcel, setIsImportingExcel] = useState(false)
+  const [excelImportComplete, setExcelImportComplete] = useState(false)
+  const [excelUploadResults, setExcelUploadResults] = useState<ExcelUploadResult[]>([])
+  const [uploadResultsOpen, setUploadResultsOpen] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
   const isNameComposingRef = useRef(false)
   const submitAfterCompositionRef = useRef(false)
+
+  useEffect(() => {
+    if (!open) setUploadResultsOpen(false)
+  }, [open])
 
   if (!open) return null
 
@@ -130,6 +160,11 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
   async function importExcelFiles(files: FileList | File[]) {
     if (files.length === 0) return
+    setIsImportingExcel(true)
+    setExcelImportComplete(false)
+    setExcelUploadResults([])
+    setUploadResultsOpen(false)
+    setMessage('')
     let tasks = state.tasks
     let members = state.members
     let taskCount = 0
@@ -139,103 +174,169 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
     let growthMemberCount = 0
     const errors: string[] = []
     const loadedFiles: { file: File; buffer: ArrayBuffer; isPeerReview: boolean }[] = []
+    const summaries = new Map<string, ExcelUploadAccumulator>()
 
-    for (const file of Array.from(files)) {
-      if (!/\.xlsx?$/i.test(file.name)) {
-        errors.push(`${file.name}: Excel 파일만 업로드할 수 있습니다.`)
-        continue
+    const getSummary = (file: File) => {
+      const id = `${file.name}-${file.size}-${file.lastModified}`
+      const existing = summaries.get(id)
+      if (existing) return existing
+      const next: ExcelUploadAccumulator = {
+        id,
+        name: file.name,
+        taskCount: 0,
+        memberCount: 0,
+        growthMemberCount: 0,
+        peerReviewCount: 0,
+        errorCount: 0,
       }
-      try {
-        const buffer = await file.arrayBuffer()
-        loadedFiles.push({ file, buffer, isPeerReview: detectManagedWorkbookKind(buffer) === 'peerReviews' })
-      } catch {
-        errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
-      }
+      summaries.set(id, next)
+      return next
     }
 
-    for (const { file, buffer, isPeerReview } of loadedFiles) {
-      if (isPeerReview) continue
-      try {
-        const result = parseQuickStartWorkbook(buffer, tasks, members)
-        tasks = result.tasks
-        members = result.members
-        taskCount += result.taskCount
-        memberCount += result.memberCount
-        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
-      } catch {
-        errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
-      }
-    }
-
-    const knownByName = new Map((activeTeam?.members ?? []).map((member) => [normalizedName(member.name), member]))
-    members = members.map((member) => {
-      const known = knownByName.get(normalizedName(member.name))
-      return known ? { ...member, id: known.id } : member
-    })
-
-    let growthProfiles = activeTeam?.growthProfiles ?? []
-    const importedGrowthMembers = new Set<string>()
-    for (const { file, buffer, isPeerReview } of loadedFiles) {
-      if (isPeerReview || !containsGrowthHistoryData(buffer)) continue
-      try {
-        const result = parseGrowthHistoryWorkbook(buffer, members, growthProfiles)
-        growthProfiles = result.profiles
-        result.importedMembers.forEach((name) => importedGrowthMembers.add(name))
-        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
-      } catch {
-        errors.push(`${file.name}: 이전 성과 데이터를 읽을 수 없습니다.`)
-      }
-    }
-    growthMemberCount = importedGrowthMembers.size
-
-    let peerReviews = state.peerReviews
-    const importContributions = syncAutoDistribution(tasks, members, state.contributions)
-    for (const { file, buffer, isPeerReview } of loadedFiles) {
-      if (isPeerReview) continue
-      try {
-        const result = parseIntegratedPeerReviewWorkbook(buffer, tasks, members)
-        if (result.reviews.length > 0) {
-          peerReviews = mergePeerReviews(peerReviews, result.reviews)
-          peerReviewFileCount += 1
-          peerReviewCount += result.importedCount
+    try {
+      for (const file of Array.from(files)) {
+        const summary = getSummary(file)
+        if (!/\.xlsx?$/i.test(file.name)) {
+          summary.errorCount += 1
+          errors.push(`${file.name}: Excel 파일만 업로드할 수 있습니다.`)
+          continue
         }
-        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
-      } catch {
-        errors.push(`${file.name}: 피어리뷰 데이터를 읽을 수 없습니다.`)
-      }
-    }
-    for (const { file, buffer, isPeerReview } of loadedFiles) {
-      if (!isPeerReview) continue
-      if (!activeProject) {
-        errors.push(`${file.name}: 현재 평가를 확인할 수 없습니다.`)
-        continue
-      }
-      try {
-        const result = parseProjectPeerReviewWorkbook(
-          buffer,
-          activeProject.id,
-          tasks,
-          members,
-          importContributions,
-          state.criteria.personalGradeWeight > 0,
-          formatEvaluationPeriod(activeProject.period),
-        )
-        if (result.reviews.length > 0) {
-          peerReviews = mergePeerReviews(peerReviews, result.reviews)
-          peerReviewFileCount += 1
-          peerReviewCount += result.reviews.length
+        try {
+          const buffer = await file.arrayBuffer()
+          loadedFiles.push({ file, buffer, isPeerReview: detectManagedWorkbookKind(buffer) === 'peerReviews' })
+        } catch {
+          summary.errorCount += 1
+          errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
         }
-        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
-      } catch {
-        errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
       }
-    }
 
-    if (taskCount > 0) dispatch({ type: 'IMPORT_TASKS', payload: tasks })
-    if (memberCount > 0) dispatch({ type: 'IMPORT_MEMBERS', payload: members })
-    if (peerReviewFileCount > 0) dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: peerReviews })
-    if (growthMemberCount > 0) growthProfiles.forEach((profile) => saveGrowthProfile(profile))
-    setMessage(`과제 ${taskCount}건, 팀원 ${memberCount}건, 이전 성과 ${growthMemberCount}명, 피어리뷰 ${peerReviewFileCount}개 파일(${peerReviewCount}건)을 확인했습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`)
+      for (const { file, buffer, isPeerReview } of loadedFiles) {
+        if (isPeerReview) continue
+        const summary = getSummary(file)
+        try {
+          const result = parseQuickStartWorkbook(buffer, tasks, members)
+          tasks = result.tasks
+          members = result.members
+          taskCount += result.taskCount
+          memberCount += result.memberCount
+          summary.taskCount += result.taskCount
+          summary.memberCount += result.memberCount
+          summary.errorCount += result.errors.length
+          errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+        } catch {
+          summary.errorCount += 1
+          errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
+        }
+      }
+
+      const knownByName = new Map((activeTeam?.members ?? []).map((member) => [normalizedName(member.name), member]))
+      members = members.map((member) => {
+        const known = knownByName.get(normalizedName(member.name))
+        return known ? { ...member, id: known.id } : member
+      })
+
+      let growthProfiles = activeTeam?.growthProfiles ?? []
+      const importedGrowthMembers = new Set<string>()
+      for (const { file, buffer, isPeerReview } of loadedFiles) {
+        if (isPeerReview || !containsGrowthHistoryData(buffer)) continue
+        const summary = getSummary(file)
+        try {
+          const result = parseGrowthHistoryWorkbook(buffer, members, growthProfiles)
+          growthProfiles = result.profiles
+          result.importedMembers.forEach((name) => importedGrowthMembers.add(name))
+          summary.growthMemberCount += result.importedMembers.length
+          summary.errorCount += result.errors.length
+          errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+        } catch {
+          summary.errorCount += 1
+          errors.push(`${file.name}: 이전 성과 데이터를 읽을 수 없습니다.`)
+        }
+      }
+      growthMemberCount = importedGrowthMembers.size
+
+      let peerReviews = state.peerReviews
+      const importContributions = syncAutoDistribution(tasks, members, state.contributions)
+      for (const { file, buffer, isPeerReview } of loadedFiles) {
+        if (isPeerReview) continue
+        const summary = getSummary(file)
+        try {
+          const result = parseIntegratedPeerReviewWorkbook(buffer, tasks, members)
+          if (result.reviews.length > 0) {
+            peerReviews = mergePeerReviews(peerReviews, result.reviews)
+            peerReviewFileCount += 1
+            peerReviewCount += result.importedCount
+            summary.peerReviewCount += result.importedCount
+          }
+          summary.errorCount += result.errors.length
+          errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+        } catch {
+          summary.errorCount += 1
+          errors.push(`${file.name}: 피어리뷰 데이터를 읽을 수 없습니다.`)
+        }
+      }
+      for (const { file, buffer, isPeerReview } of loadedFiles) {
+        if (!isPeerReview) continue
+        const summary = getSummary(file)
+        if (!activeProject) {
+          summary.errorCount += 1
+          errors.push(`${file.name}: 현재 평가를 확인할 수 없습니다.`)
+          continue
+        }
+        try {
+          const result = parseProjectPeerReviewWorkbook(
+            buffer,
+            activeProject.id,
+            tasks,
+            members,
+            importContributions,
+            state.criteria.personalGradeWeight > 0,
+            formatEvaluationPeriod(activeProject.period),
+          )
+          if (result.reviews.length > 0) {
+            peerReviews = mergePeerReviews(peerReviews, result.reviews)
+            peerReviewFileCount += 1
+            peerReviewCount += result.reviews.length
+            summary.peerReviewCount += result.reviews.length
+          }
+          summary.errorCount += result.errors.length
+          errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+        } catch {
+          summary.errorCount += 1
+          errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
+        }
+      }
+
+      if (taskCount > 0) dispatch({ type: 'IMPORT_TASKS', payload: tasks })
+      if (memberCount > 0) dispatch({ type: 'IMPORT_MEMBERS', payload: members })
+      if (peerReviewFileCount > 0) dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: peerReviews })
+      if (growthMemberCount > 0) growthProfiles.forEach((profile) => saveGrowthProfile(profile))
+
+      const results = Array.from(summaries.values()).map<ExcelUploadResult>((summary) => {
+        const details = [
+          summary.taskCount > 0 ? `과제 ${summary.taskCount}건` : '',
+          summary.memberCount > 0 ? `팀원 ${summary.memberCount}건` : '',
+          summary.growthMemberCount > 0 ? `이전 성과 ${summary.growthMemberCount}명` : '',
+          summary.peerReviewCount > 0 ? `피어리뷰 ${summary.peerReviewCount}건` : '',
+        ].filter(Boolean)
+        const importedCount = summary.taskCount + summary.memberCount + summary.growthMemberCount + summary.peerReviewCount
+        return {
+          id: summary.id,
+          name: summary.name,
+          details: details.length > 0 ? details : ['가져올 데이터를 찾지 못했습니다.'],
+          errorCount: summary.errorCount,
+          status: importedCount === 0 ? 'error' : summary.errorCount > 0 ? 'warning' : 'success',
+        }
+      })
+      const imported = taskCount + memberCount + growthMemberCount + peerReviewCount > 0
+    setExcelUploadResults(results)
+    setExcelImportComplete(imported)
+    setUploadResultsOpen(results.length > 0)
+      setMessage(imported
+        ? `과제 ${taskCount}건, 팀원 ${memberCount}건, 이전 성과 ${growthMemberCount}명, 피어리뷰 ${peerReviewCount}건을 가져왔습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`
+        : '업로드한 파일에서 가져올 데이터를 찾지 못했습니다.')
+    } finally {
+      setIsImportingExcel(false)
+    }
   }
 
   function selectSourceProject(projectId: string) {
@@ -309,7 +410,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
 
   return (
     <div className="ui-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="quick-start-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <div className="ui-modal-panel flex max-h-[calc(100dvh-2rem)] max-w-5xl flex-col overflow-hidden">
+      <div className="ui-modal-panel quick-start-modal flex flex-col overflow-hidden">
         <div className="flex shrink-0 items-start justify-between gap-4 pb-3">
           <div><h2 id="quick-start-title" className="text-lg font-semibold leading-6 text-gray-950">빠른 시작</h2><p className="mt-1 text-sm text-gray-500">과제와 팀원을 빠르게 준비합니다. 닫으면 기존 화면에서 각각 입력할 수 있습니다.</p></div>
           <ModalCloseButton onClick={onClose} label="빠른 시작 닫기" />
@@ -357,7 +458,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
                 </div>
                 <button
                   type="button"
-                  onClick={() => downloadQuickStartTemplateBundle(state.tasks, state.members, activeProject?.period.year)}
+                  onClick={() => { void downloadQuickStartTemplateBundle(state.tasks, state.members, activeProject?.period.year) }}
                   className="ui-button ui-button-primary shrink-0"
                 >전체 ZIP 다운로드</button>
               </div>
@@ -376,7 +477,7 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
                     </div>
                     <button
                       type="button"
-                      onClick={() => downloadQuickStartTemplateFile(template.kind, state.tasks, state.members, activeProject?.period.year)}
+                      onClick={() => { void downloadQuickStartTemplateFile(template.kind, state.tasks, state.members, activeProject?.period.year) }}
                       className="ui-button ui-button-secondary ui-button-sm shrink-0"
                     >다운로드</button>
                   </div>
@@ -388,12 +489,42 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
               <p className="mt-1 text-sm leading-6 text-gray-500">과제·팀원·이전 성과·피어리뷰 파일을 함께 올리면 데이터 종류를 자동으로 구분합니다.</p>
               <FileDropZone
                 className="mt-4 min-h-56"
-                onClick={() => excelInputRef.current?.click()}
+                disabled={isImportingExcel}
+                onClick={() => { if (!isImportingExcel) excelInputRef.current?.click() }}
                 onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
-                title="작성한 양식 파일을 여기에 드래그"
-                description="여러 Excel 파일 동시 업로드 가능 (.xlsx)"
+                title={isImportingExcel ? '파일을 확인하고 있습니다…' : '작성한 양식 파일을 여기에 드래그'}
+                description={isImportingExcel ? '데이터 종류와 내용을 확인하는 중입니다.' : '여러 Excel 파일 동시 업로드 가능 (.xlsx)'}
               />
-              <p className="mt-3 text-xs leading-5 text-gray-400">드롭 영역을 누르면 파일 선택창이 열립니다.</p>
+              {!isImportingExcel && excelUploadResults.length === 0 && <p className="mt-3 text-xs leading-5 text-gray-400">드롭 영역을 누르면 파일 선택창이 열립니다.</p>}
+              {isImportingExcel && <div className="mt-3 flex items-center gap-2 text-sm text-accent" role="status" aria-live="polite">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+                업로드한 파일을 확인하고 있습니다.
+              </div>}
+              {excelUploadResults.length > 0 && <aside className={`quick-start-upload-drawer ${uploadResultsOpen ? 'is-open' : ''}`} aria-label="업로드 결과">
+                <div className="quick-start-upload-drawer-header">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900">업로드 결과</h4>
+                    <p className="mt-1 text-xs text-gray-500">{excelUploadResults.length}개 파일</p>
+                  </div>
+                  <button type="button" className="ui-icon-button" onClick={() => setUploadResultsOpen(false)} aria-label="업로드 결과 닫기">×</button>
+                </div>
+                <div className="quick-start-upload-drawer-list">
+                  {excelUploadResults.map((result, index) => (
+                    <div key={result.id} className={`flex items-start gap-3 px-4 py-3 ${index > 0 ? 'border-t border-gray-100' : ''}`}>
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-50 text-gray-500" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6.75 3.75h6.1L17.25 8v12.25H6.75z" /><path d="M12.75 3.75V8h4.5" /></svg>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900">{result.name}</p>
+                        <p className="mt-0.5 text-xs leading-5 text-gray-500">{result.details.join(' · ')}{result.errorCount > 0 ? ` · 확인 필요 ${result.errorCount}건` : ''}</p>
+                      </div>
+                      <Badge tone={result.status === 'success' ? 'success' : result.status === 'warning' ? 'accent' : 'danger'} className="shrink-0">
+                        {result.status === 'success' ? '완료' : result.status === 'warning' ? '확인 필요' : '실패'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </aside>}
               <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
             </div>
           </section>}
@@ -434,7 +565,16 @@ export default function ProjectSetupStart({ open, onClose }: ProjectSetupStartPr
           </section>}
         </div>
 
-        {message && <div className="mt-4 shrink-0 border-t border-gray-200 pt-4"><p className="flex items-center gap-2 text-sm text-success">{previousImportComplete && <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 fill-current"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.86-9.78a.75.75 0 0 0-1.22-.88l-3.24 4.48-1.98-1.98a.75.75 0 0 0-1.06 1.06l2.6 2.6a.75.75 0 0 0 1.14-.1l3.76-5.18Z" clipRule="evenodd" /></svg>}{message}</p></div>}
+        {message && <div className="mt-4 flex shrink-0 items-center justify-between gap-4 border-t border-gray-200 pt-4"><p className={`flex min-w-0 items-center gap-2 text-sm ${mode === 'excel' && !excelImportComplete ? 'text-danger' : 'text-success'}`}>{(previousImportComplete || excelImportComplete) && <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 fill-current"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.86-9.78a.75.75 0 0 0-1.22-.88l-3.24 4.48-1.98-1.98a.75.75 0 0 0-1.06 1.06l2.6 2.6a.75.75 0 0 0 1.14-.1l3.76-5.18Z" clipRule="evenodd" /></svg>}<span>{message}</span></p>{mode === 'excel' && excelUploadResults.length > 0 && !uploadResultsOpen && <button type="button" className="ui-button ui-button-secondary ui-button-sm shrink-0" onClick={() => setUploadResultsOpen(true)}>업로드 결과 {excelUploadResults.length}개 보기</button>}</div>}
+        {mode === 'excel' && excelUploadResults.length > 0 && !isImportingExcel && <div className="mt-4 flex shrink-0 items-center justify-between gap-4 border-t border-gray-200 pt-4">
+          <p className="text-sm text-gray-500">{excelImportComplete ? '가져온 데이터로 평가를 계속할 수 있습니다.' : '파일 내용을 확인한 뒤 다시 업로드해 주세요.'}</p>
+          <button
+            type="button"
+            disabled={!excelImportComplete}
+            onClick={() => { if (onStartEvaluation) onStartEvaluation(); else onClose() }}
+            className="ui-button ui-button-primary shrink-0"
+          >평가 시작하기</button>
+        </div>}
         {mode === 'previous' && sourceProject && <div className="mt-4 flex shrink-0 items-center justify-between gap-4 border-t border-gray-200 pt-4"><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={copyCriteria} onChange={(event) => { setCopyCriteria(event.target.checked); setPreviousImportComplete(false) }} /> 평가기준도 가져오기</label><button type="button" onClick={previousImportComplete ? onClose : copyPreviousProject} disabled={!previousImportComplete && selectedTaskIds.length === 0 && selectedMemberIds.length === 0 && !copyCriteria} className={`ui-button ui-button-primary shrink-0 ${previousImportComplete ? 'quick-start-complete' : ''}`}>{previousImportComplete ? '시작하기' : '선택 항목 가져오기'}</button></div>}
       </div>
     </div>

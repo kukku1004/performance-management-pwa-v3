@@ -93,7 +93,7 @@ function crc32(bytes: Uint8Array) {
   return (crc ^ 0xffffffff) >>> 0
 }
 
-function zipStoredFiles(files: { name: string; data: Uint8Array }[]) {
+function zipStoredFileBytes(files: { name: string; data: Uint8Array }[]) {
   const encoder = new TextEncoder()
   const localParts: Uint8Array[] = []
   const centralParts: Uint8Array[] = []
@@ -120,7 +120,45 @@ function zipStoredFiles(files: { name: string; data: Uint8Array }[]) {
   const output = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0))
   let cursor = 0
   parts.forEach((part) => { output.set(part, cursor); cursor += part.length })
-  return new Blob([output.buffer], { type: 'application/zip' })
+  return output
+}
+
+function zipStoredFiles(files: { name: string; data: Uint8Array }[]) {
+  return new Blob([zipStoredFileBytes(files).buffer], { type: 'application/zip' })
+}
+
+async function unzipFileEntries(bytes: Uint8Array) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  let endOffset = bytes.byteLength - 22
+  while (endOffset >= 0 && view.getUint32(endOffset, true) !== 0x06054b50) endOffset -= 1
+  if (endOffset < 0) throw new Error('Excel 양식의 ZIP 디렉터리를 찾을 수 없습니다.')
+  const entryCount = view.getUint16(endOffset + 10, true)
+  let cursor = view.getUint32(endOffset + 16, true)
+  const decoder = new TextDecoder()
+  const entries = new Map<string, Uint8Array>()
+  for (let index = 0; index < entryCount; index += 1) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) throw new Error('Excel 양식의 ZIP 항목이 손상되었습니다.')
+    const method = view.getUint16(cursor + 10, true)
+    const compressedSize = view.getUint32(cursor + 20, true)
+    const nameLength = view.getUint16(cursor + 28, true)
+    const extraLength = view.getUint16(cursor + 30, true)
+    const commentLength = view.getUint16(cursor + 32, true)
+    const localOffset = view.getUint32(cursor + 42, true)
+    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength))
+    const localNameLength = view.getUint16(localOffset + 26, true)
+    const localExtraLength = view.getUint16(localOffset + 28, true)
+    const dataOffset = localOffset + 30 + localNameLength + localExtraLength
+    const compressed = bytes.slice(dataOffset, dataOffset + compressedSize)
+    let data: Uint8Array
+    if (method === 0) data = compressed
+    else if (method === 8) {
+      const stream = new Blob([compressed.buffer]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
+      data = new Uint8Array(await new Response(stream).arrayBuffer())
+    } else throw new Error(`지원하지 않는 ZIP 압축 방식입니다: ${method}`)
+    if (!name.endsWith('/')) entries.set(name, data)
+    cursor += 46 + nameLength + extraLength + commentLength
+  }
+  return entries
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -132,6 +170,31 @@ function downloadBlob(blob: Blob, filename: string) {
 export interface DownloadableTemplateFile {
   name: string
   data: Uint8Array
+}
+
+export type QuickStartTemplateKind = 'tasks' | 'members' | 'growth' | 'peerReviews'
+
+const STATIC_TEMPLATE_FILENAMES: Record<QuickStartTemplateKind, string> = {
+  tasks: '01_과제_입력_양식.xlsx',
+  members: '02_팀원_입력_양식.xlsx',
+  growth: '03_이전성과_5개년_입력_양식.xlsx',
+  peerReviews: '04_피어리뷰_입력_양식.xlsx',
+}
+
+async function loadStaticTemplateFile(kind: QuickStartTemplateKind): Promise<DownloadableTemplateFile | null> {
+  const baseUrl = import.meta.env.BASE_URL || '/'
+  const templateUrl = `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}templates/${encodeURIComponent(STATIC_TEMPLATE_FILENAMES[kind])}`
+  try {
+    const response = await fetch(templateUrl)
+    if (!response.ok) return null
+    return {
+      name: STATIC_TEMPLATE_FILENAMES[kind],
+      data: new Uint8Array(await response.arrayBuffer()),
+    }
+  } catch (error) {
+    console.warn(`빈 Excel 양식을 불러오지 못했습니다: ${STATIC_TEMPLATE_FILENAMES[kind]}`, error)
+    return null
+  }
 }
 
 function workbookTemplateFile(workbook: XLSX.WorkBook, name: string): DownloadableTemplateFile {
@@ -186,8 +249,9 @@ export function createTaskTemplateFile(tasks: Task[] = []) {
         task.performanceGrade,
       ])
     : [
-        ['신규 랜딩페이지 제작', '핵심', '대', '전환율 15% 개선', '전환율 18% 달성', 'A'],
-        ['내부 협업툴 정비', '일반', '소', '', '', ''],
+        ['', '', '', '', '', ''],
+        ['', '', '', '', '', ''],
+        ['', '', '', '', '', ''],
       ]
   const rows = [
     [...TASK_HEADERS],
@@ -197,11 +261,11 @@ export function createTaskTemplateFile(tasks: Task[] = []) {
   ws['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 28 }, { wch: 28 }, { wch: 10 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '과제양식')
-  return workbookTemplateFile(wb, '과제_업로드_양식.xlsx')
+  return workbookTemplateFile(wb, STATIC_TEMPLATE_FILENAMES.tasks)
 }
 
 export async function downloadTaskTemplate() {
-  downloadTemplateFile(createTaskTemplateFile())
+  downloadTemplateFile(await loadStaticTemplateFile('tasks') ?? createTaskTemplateFile())
 }
 
 export interface TaskImportResult {
@@ -293,8 +357,11 @@ export function createMemberTemplateFile(members: TeamMember[] = []) {
         member.comment,
       ])
     : [
-        ['김민준', '팀장', '과장', 7, '기획', ''],
-        ['이서연', '', '대리', 3, '디자인', ''],
+        ['', '', '', '', '', ''],
+        ['', '', '', '', '', ''],
+        ['', '', '', '', '', ''],
+        ['', '', '', '', '', ''],
+        ['', '', '', '', '', ''],
       ]
   const rows = [
     [...MEMBER_HEADERS],
@@ -304,29 +371,38 @@ export function createMemberTemplateFile(members: TeamMember[] = []) {
   ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 16 }, { wch: 30 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '팀원양식')
-  return workbookTemplateFile(wb, '팀원_업로드_양식.xlsx')
+  return workbookTemplateFile(wb, STATIC_TEMPLATE_FILENAMES.members)
 }
 
 export async function downloadMemberTemplate() {
-  downloadTemplateFile(createMemberTemplateFile())
+  downloadTemplateFile(await loadStaticTemplateFile('members') ?? createMemberTemplateFile())
 }
-
-export type QuickStartTemplateKind = 'tasks' | 'members' | 'growth' | 'peerReviews'
 
 function templateMembers(members: TeamMember[]) {
   if (members.length > 0) return members
-  return [
-    { id: 'template-member-1', name: '김민준', active: true, position: '팀장', level: '과장', yearsOfService: 7, role: '기획', comment: '' },
-    { id: 'template-member-2', name: '이서연', active: true, position: '', level: '대리', yearsOfService: 3, role: '디자인', comment: '' },
-  ] satisfies TeamMember[]
+  return Array.from({ length: 5 }, (_, index) => ({
+    id: `template-member-${index + 1}`,
+    name: '',
+    active: true,
+    position: '',
+    level: '',
+    yearsOfService: null,
+    role: '',
+    comment: '',
+  })) satisfies TeamMember[]
 }
 
 function templateTasks(tasks: Task[]) {
   if (tasks.length > 0) return tasks
-  return [
-    { id: 'template-task-1', name: '신규 랜딩페이지 제작', importance: '핵심', workload: '대', objective: '전환율 15% 개선', achievement: '', performanceGrade: 'B' },
-    { id: 'template-task-2', name: '내부 협업툴 정비', importance: '일반', workload: '소', objective: '', achievement: '', performanceGrade: 'B' },
-  ] satisfies Task[]
+  return Array.from({ length: 3 }, (_, index) => ({
+    id: `template-task-${index + 1}`,
+    name: '',
+    importance: '일반',
+    workload: '중',
+    objective: '',
+    achievement: '',
+    performanceGrade: 'B',
+  })) satisfies Task[]
 }
 
 export function createGrowthHistoryTemplateFile(members: TeamMember[] = [], currentYear = new Date().getFullYear()) {
@@ -363,7 +439,7 @@ export function createGrowthHistoryTemplateFile(members: TeamMember[] = [], curr
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, guide, '안내')
   XLSX.utils.book_append_sheet(wb, ws, '성과입력')
-  return workbookTemplateFile(wb, '이전_성과_업로드_양식.xlsx')
+  return workbookTemplateFile(wb, STATIC_TEMPLATE_FILENAMES.growth)
 }
 
 export function createIntegratedPeerReviewTemplateFile(tasks: Task[] = [], members: TeamMember[] = []) {
@@ -399,7 +475,7 @@ export function createIntegratedPeerReviewTemplateFile(tasks: Task[] = [], membe
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, guide, '안내')
   XLSX.utils.book_append_sheet(wb, ws, '피어리뷰')
-  return workbookTemplateFile(wb, '피어리뷰_업로드_양식.xlsx')
+  return workbookTemplateFile(wb, STATIC_TEMPLATE_FILENAMES.peerReviews)
 }
 
 export function createQuickStartTemplateFiles(
@@ -415,28 +491,37 @@ export function createQuickStartTemplateFiles(
   ]
 }
 
-export function downloadQuickStartTemplateFile(
+export async function downloadQuickStartTemplateFile(
   kind: QuickStartTemplateKind,
-  tasks: Task[] = [],
-  members: TeamMember[] = [],
+  _tasks: Task[] = [],
+  _members: TeamMember[] = [],
   currentYear = new Date().getFullYear(),
 ) {
   const fileByKind: Record<QuickStartTemplateKind, DownloadableTemplateFile> = {
-    tasks: createTaskTemplateFile(tasks),
-    members: createMemberTemplateFile(members),
-    growth: createGrowthHistoryTemplateFile(members, currentYear),
-    peerReviews: createIntegratedPeerReviewTemplateFile(tasks, members),
+    tasks: createTaskTemplateFile(),
+    members: createMemberTemplateFile(),
+    growth: createGrowthHistoryTemplateFile([], currentYear),
+    peerReviews: createIntegratedPeerReviewTemplateFile(),
   }
-  downloadTemplateFile(fileByKind[kind])
+  downloadTemplateFile(await loadStaticTemplateFile(kind) ?? fileByKind[kind])
 }
 
-export function downloadQuickStartTemplateBundle(
-  tasks: Task[] = [],
-  members: TeamMember[] = [],
+export async function downloadQuickStartTemplateBundle(
+  _tasks: Task[] = [],
+  _members: TeamMember[] = [],
   currentYear = new Date().getFullYear(),
 ) {
+  const fallbackFiles = createQuickStartTemplateFiles([], [], currentYear)
+  const fallbackByKind: Record<QuickStartTemplateKind, DownloadableTemplateFile> = {
+    tasks: fallbackFiles[0],
+    members: fallbackFiles[1],
+    growth: fallbackFiles[2],
+    peerReviews: fallbackFiles[3],
+  }
+  const kinds: QuickStartTemplateKind[] = ['tasks', 'members', 'growth', 'peerReviews']
+  const files = await Promise.all(kinds.map(async (kind) => await loadStaticTemplateFile(kind) ?? fallbackByKind[kind]))
   downloadTemplateFilesZip(
-    createQuickStartTemplateFiles(tasks, members, currentYear),
+    files,
     '성과평가_입력양식_전체.zip',
   )
 }
@@ -671,28 +756,81 @@ function applyPeerReviewSheetLayout(ws: XLSX.WorkSheet, participantCount: number
   ws['!rows'] = [{ hpt: 30 }, { hpt: 22 }, { hpt: 26 }, ...Array.from({ length: participantCount }, () => ({ hpt: 30 })), { hpt: 24 }]
   ws['!merges'] = [XLSX.utils.decode_range(`A1:${lastColumn}1`), XLSX.utils.decode_range(`A2:${lastColumn}2`)]
   ws['!autofilter'] = { ref: `A3:${lastColumn}${lastDataRow}` }
-  ;(ws as XLSX.WorkSheet & { '!freeze'?: unknown })['!freeze'] = { xSplit: 1, ySplit: 3, topLeftCell: 'B4', activePane: 'bottomRight', state: 'frozen' }
   ;(ws as XLSX.WorkSheet & { '!dataValidation'?: unknown[] })['!dataValidation'] = [
     { sqref: `B4:B${lastDataRow}`, type: 'whole', operator: 'between', formula1: '0', formula2: '100', allowBlank: true },
     ...(includeGrade ? [{ sqref: `C4:C${lastDataRow}`, type: 'list', formula1: '"S,A,B,C,D"', allowBlank: true }] : []),
   ]
-  const style = (cellAddress: string, fill: string, color: string, bold = false) => {
+  const style = (
+    cellAddress: string,
+    fill: string,
+    color: string,
+    bold = false,
+    horizontal: 'left' | 'center' | 'right' = 'left',
+    fontSize = 10,
+  ) => {
     const cell = ws[cellAddress]
     if (!cell) return
-    cell.s = { fill: { fgColor: { rgb: fill } }, font: { name: 'Arial', sz: 10, color: { rgb: color }, bold }, alignment: { vertical: 'center', wrapText: true } }
+    cell.s = {
+      fill: { patternType: 'solid', fgColor: { rgb: fill } },
+      font: { name: 'Arial', sz: fontSize, color: { rgb: color }, bold },
+      alignment: { vertical: 'center', horizontal, wrapText: true },
+      border: {
+        top: { style: 'thin', color: { rgb: 'D9DEE7' } },
+        bottom: { style: 'thin', color: { rgb: 'D9DEE7' } },
+        left: { style: 'thin', color: { rgb: 'D9DEE7' } },
+        right: { style: 'thin', color: { rgb: 'D9DEE7' } },
+      },
+    }
   }
+  style('A1', '17233B', 'FFFFFF', true, 'left', 16)
+  style('A2', 'EEF2F7', '526071', false, 'left', 10)
   for (let column = 0; column < (includeGrade ? 4 : 3); column += 1) {
-    style(XLSX.utils.encode_cell({ r: 2, c: column }), 'F3F4F6', '111827', true)
+    style(XLSX.utils.encode_cell({ r: 2, c: column }), 'F3F4F6', '111827', true, 'center', 11)
   }
   for (let row = 3; row < totalRow - 1; row += 1) {
-    style(XLSX.utils.encode_cell({ r: row, c: 1 }), 'FFF7ED', '111827')
-    if (includeGrade) style(XLSX.utils.encode_cell({ r: row, c: 2 }), 'FFF7ED', '111827')
+    style(XLSX.utils.encode_cell({ r: row, c: 0 }), 'FFFFFF', '111827')
+    style(XLSX.utils.encode_cell({ r: row, c: 1 }), 'FFF4E8', '111827', false, 'right')
+    if (includeGrade) style(XLSX.utils.encode_cell({ r: row, c: 2 }), 'FFF4E8', '111827', false, 'center')
+    style(XLSX.utils.encode_cell({ r: row, c: includeGrade ? 3 : 2 }), 'FFF4E8', '6B7280')
+  }
+  for (let column = 0; column < (includeGrade ? 4 : 3); column += 1) {
+    style(XLSX.utils.encode_cell({ r: totalRow - 1, c: column }), 'EAF6EA', '205B35', true, column === 1 ? 'right' : 'left')
   }
 }
 
-export async function downloadMemberPeerReviewTemplates({
-  projectId: _projectId, periodLabel, periodFileName, tasks, members, contributions: _contributions, includeGrade,
-}: {
+function applyPeerReviewGuideLayout(ws: XLSX.WorkSheet) {
+  ws['!cols'] = [{ wch: 14 }, { wch: 68 }]
+  ws['!rows'] = [{ hpt: 34 }, { hpt: 28 }, { hpt: 24 }, { hpt: 10 }, { hpt: 26 }, { hpt: 30 }, { hpt: 30 }, { hpt: 30 }]
+  ws['!merges'] = [XLSX.utils.decode_range('A1:B1')]
+  const style = (address: string, fill: string, color: string, bold = false, size = 10) => {
+    const cell = ws[address]
+    if (!cell) return
+    cell.s = {
+      fill: { patternType: 'solid', fgColor: { rgb: fill } },
+      font: { name: 'Arial', sz: size, color: { rgb: color }, bold },
+      alignment: { vertical: 'center', horizontal: 'left', wrapText: true },
+      border: {
+        top: { style: 'thin', color: { rgb: 'D9DEE7' } },
+        bottom: { style: 'thin', color: { rgb: 'D9DEE7' } },
+        left: { style: 'thin', color: { rgb: 'D9DEE7' } },
+        right: { style: 'thin', color: { rgb: 'D9DEE7' } },
+      },
+    }
+  }
+  style('A1', '17233B', 'FFFFFF', true, 18)
+  style('A2', 'EEF2F7', '526071')
+  style('B2', 'EEF2F7', '111827', true)
+  style('A3', 'EEF2F7', '526071')
+  style('B3', 'EEF2F7', '111827', true)
+  style('A5', 'F3F4F6', '111827', true, 11)
+  style('B5', 'F3F4F6', '111827', true, 11)
+  for (let row = 6; row <= 8; row += 1) {
+    style(`A${row}`, 'FFFFFF', '111827', true)
+    style(`B${row}`, 'FFFFFF', '111827')
+  }
+}
+
+interface MemberPeerReviewTemplateInput {
   projectId: string
   periodLabel: string
   periodFileName: string
@@ -700,7 +838,99 @@ export async function downloadMemberPeerReviewTemplates({
   members: TeamMember[]
   contributions: Contribution[]
   includeGrade: boolean
-}) {
+  participantIdsByTask?: Record<string, string[]>
+}
+
+function xmlEscape(value: unknown) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+}
+
+function peerReviewGuideXml() {
+  return `<?xml version="1.0" encoding="utf-8"?><x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:sheetViews><x:sheetView showGridLines="0" workbookViewId="0" /></x:sheetViews><x:sheetFormatPr defaultRowHeight="15" /><x:cols><x:col min="1" max="1" width="12" hidden="0" customWidth="1" /><x:col min="2" max="2" width="76" hidden="0" customWidth="1" /></x:cols><x:sheetData><x:row r="1" ht="34" customHeight="1"><x:c r="A1" s="4" t="str"><x:v>피어리뷰 입력 안내</x:v></x:c><x:c r="B1" s="4" /></x:row><x:row r="2" ht="30" customHeight="1"><x:c r="A2" s="9" t="str"><x:v>과제별로 평가 대상 팀원의 기여도·수행등급·근거를 입력합니다.</x:v></x:c><x:c r="B2" s="9" /></x:row><x:row r="4"><x:c r="A4" s="14" t="str"><x:v>구분</x:v></x:c><x:c r="B4" s="14" t="str"><x:v>입력 안내</x:v></x:c></x:row><x:row r="5" ht="28" customHeight="1"><x:c r="A5" s="17" t="str"><x:v>1</x:v></x:c><x:c r="B5" s="17" t="str"><x:v>평가기간·평가자·과제·대상 팀원은 현재 데이터로 입력되어 있습니다.</x:v></x:c></x:row><x:row r="6" ht="28" customHeight="1"><x:c r="A6" s="17" t="str"><x:v>2</x:v></x:c><x:c r="B6" s="17" t="str"><x:v>과제별 시트의 연한 주황색 칸에 기여도·수행등급·근거를 입력합니다.</x:v></x:c></x:row><x:row r="7" ht="28" customHeight="1"><x:c r="A7" s="17" t="str"><x:v>3</x:v></x:c><x:c r="B7" s="17" t="str"><x:v>과제별 평가 대상의 기여도 합계가 100%인지 확인합니다.</x:v></x:c></x:row></x:sheetData><x:mergeCells><x:mergeCell ref="A1:B1" /><x:mergeCell ref="A2:B2" /></x:mergeCells><x:pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3" /></x:worksheet>`
+}
+
+function peerReviewMetaXml(periodLabel: string, reviewerName: string) {
+  return `<?xml version="1.0" encoding="utf-8"?><x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:sheetFormatPr defaultRowHeight="15" /><x:cols><x:col min="1" max="1" width="18" hidden="0" customWidth="1" /><x:col min="2" max="2" width="30" hidden="0" customWidth="1" /></x:cols><x:sheetData><x:row r="1"><x:c r="A1" s="19" t="str"><x:v>항목</x:v></x:c><x:c r="B1" s="19" t="str"><x:v>값</x:v></x:c></x:row><x:row r="2"><x:c r="A2" s="15" t="str"><x:v>평가기간</x:v></x:c><x:c r="B2" s="15" t="str"><x:v>${xmlEscape(periodLabel)}</x:v></x:c></x:row><x:row r="3"><x:c r="A3" s="15" t="str"><x:v>평가자</x:v></x:c><x:c r="B3" s="15" t="str"><x:v>${xmlEscape(reviewerName)}</x:v></x:c></x:row><x:row r="4"><x:c r="A4" s="15" t="str"><x:v>양식버전</x:v></x:c><x:c r="B4" s="15" t="n"><x:v>5</x:v></x:c></x:row></x:sheetData><x:pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3" /></x:worksheet>`
+}
+
+function peerReviewTaskXml(task: Task, periodLabel: string, reviewer: TeamMember, participants: TeamMember[], includeGrade: boolean) {
+  const percentages = evenlyDistributedPercentages(participants.length)
+  const lastColumn = includeGrade ? 'D' : 'C'
+  const totalRow = participants.length + 4
+  const lastDataRow = totalRow - 1
+  const headerCells = includeGrade
+    ? '<x:c r="A3" s="14" t="str"><x:v>평가 대상</x:v></x:c><x:c r="B3" s="14" t="str"><x:v>기여도(%)</x:v></x:c><x:c r="C3" s="14" t="str"><x:v>수행등급</x:v></x:c><x:c r="D3" s="14" t="str"><x:v>근거</x:v></x:c>'
+    : '<x:c r="A3" s="14" t="str"><x:v>평가 대상</x:v></x:c><x:c r="B3" s="14" t="str"><x:v>기여도(%)</x:v></x:c><x:c r="C3" s="14" t="str"><x:v>근거</x:v></x:c>'
+  const participantRows = participants.map((member, index) => {
+    const row = index + 4
+    const label = `${member.name}${member.id === reviewer.id ? ' (본인)' : ''}`
+    return includeGrade
+      ? `<x:row r="${row}" ht="28" customHeight="1"><x:c r="A${row}" s="26" t="str"><x:v>${xmlEscape(label)}</x:v></x:c><x:c r="B${row}" s="30" t="n"><x:v>${percentages[index]}</x:v></x:c><x:c r="C${row}" s="30" t="str" /><x:c r="D${row}" s="29" t="str" /></x:row>`
+      : `<x:row r="${row}" ht="28" customHeight="1"><x:c r="A${row}" s="26" t="str"><x:v>${xmlEscape(label)}</x:v></x:c><x:c r="B${row}" s="30" t="n"><x:v>${percentages[index]}</x:v></x:c><x:c r="C${row}" s="29" t="str" /></x:row>`
+  }).join('')
+  const totalCells = includeGrade
+    ? `<x:c r="A${totalRow}" s="34" t="str"><x:v>기여도 합계</x:v></x:c><x:c r="B${totalRow}" s="35" t="n"><x:f>SUM(B4:B${lastDataRow})</x:f><x:v>100</x:v></x:c><x:c r="C${totalRow}" s="35" t="str"><x:v>검증</x:v></x:c><x:c r="D${totalRow}" s="35" t="str"><x:f>IF(B${totalRow}=100,"정상","100% 확인")</x:f><x:v>정상</x:v></x:c>`
+    : `<x:c r="A${totalRow}" s="34" t="str"><x:v>기여도 합계</x:v></x:c><x:c r="B${totalRow}" s="35" t="n"><x:f>SUM(B4:B${lastDataRow})</x:f><x:v>100</x:v></x:c><x:c r="C${totalRow}" s="35" t="str"><x:f>IF(B${totalRow}=100,"정상","100% 확인")</x:f><x:v>정상</x:v></x:c>`
+  const columns = includeGrade
+    ? '<x:col min="1" max="1" width="18" hidden="0" customWidth="1" /><x:col min="2" max="2" width="14" hidden="0" customWidth="1" /><x:col min="3" max="3" width="14" hidden="0" customWidth="1" /><x:col min="4" max="4" width="48" hidden="0" customWidth="1" />'
+    : '<x:col min="1" max="1" width="18" hidden="0" customWidth="1" /><x:col min="2" max="2" width="14" hidden="0" customWidth="1" /><x:col min="3" max="3" width="48" hidden="0" customWidth="1" />'
+  const gradeValidation = includeGrade ? `<x:dataValidation type="list" sqref="C4:C${lastDataRow}"><x:formula1>"S,A,B,C,D"</x:formula1></x:dataValidation>` : ''
+  return `<?xml version="1.0" encoding="utf-8"?><x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:sheetViews><x:sheetView showGridLines="0" workbookViewId="0" /></x:sheetViews><x:sheetFormatPr defaultRowHeight="15" /><x:cols>${columns}</x:cols><x:sheetData><x:row r="1" ht="32" customHeight="1"><x:c r="A1" s="22" t="str"><x:v>과제: ${xmlEscape(task.name)}</x:v></x:c></x:row><x:row r="2" ht="24" customHeight="1"><x:c r="A2" s="24" t="str"><x:v>평가기간: ${xmlEscape(periodLabel)}</x:v></x:c></x:row><x:row r="3" ht="28" customHeight="1">${headerCells}</x:row>${participantRows}<x:row r="${totalRow}" ht="28" customHeight="1">${totalCells}</x:row></x:sheetData><x:mergeCells><x:mergeCell ref="A1:${lastColumn}1" /><x:mergeCell ref="A2:${lastColumn}2" /></x:mergeCells><x:autoFilter ref="A3:${lastColumn}${lastDataRow}" /><x:dataValidations count="${includeGrade ? 2 : 1}"><x:dataValidation type="whole" operator="between" sqref="B4:B${lastDataRow}"><x:formula1>0</x:formula1><x:formula2>100</x:formula2></x:dataValidation>${gradeValidation}</x:dataValidations><x:pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3" /></x:worksheet>`
+}
+
+async function createStyledMemberPeerReviewTemplateFiles(input: MemberPeerReviewTemplateInput, templateData: Uint8Array) {
+  const baseEntries = await unzipFileEntries(templateData)
+  const encoder = new TextEncoder()
+  const requiredBase = ['_rels/.rels', 'xl/styles.xml', 'xl/theme/theme1.xml', 'xl/sharedStrings.xml']
+  const generated: string[] = []
+  const files: { name: string; data: Uint8Array }[] = []
+  for (const reviewer of input.members) {
+    const taskRows = input.tasks.flatMap((task, taskIndex) => {
+      const assigned = peerReviewParticipants(task.id, input.members, input.contributions)
+      const defaults = assigned.length > 0 ? assigned : input.members
+      const selectedIds = input.participantIdsByTask?.[task.id]
+      const participants = selectedIds ? input.members.filter((member) => selectedIds.includes(member.id)) : defaults
+      return participants.length > 0 ? [{ task, taskIndex, participants }] : []
+    })
+    const workbookSheets = [
+      '<x:sheet name="안내" sheetId="1" r:id="rId1" />',
+      '<x:sheet name="_메타" sheetId="2" state="hidden" r:id="rId2" />',
+      ...taskRows.map(({ task, taskIndex }, index) => `<x:sheet name="${xmlEscape(safeSheetName(task.name, taskIndex))}" sheetId="${index + 3}" r:id="rId${index + 3}" />`),
+    ].join('')
+    const workbookXml = `<?xml version="1.0" encoding="utf-8"?><x:workbook xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><x:sheets>${workbookSheets}</x:sheets></x:workbook>`
+    const rels = [
+      '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="/xl/styles.xml" Id="rIdStyles" />',
+      '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="/xl/theme/theme1.xml" Id="rIdTheme" />',
+      '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="/xl/sharedStrings.xml" Id="rIdStrings" />',
+      '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/xl/worksheets/sheet1.xml" Id="rId1" />',
+      '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/xl/worksheets/sheet2.xml" Id="rId2" />',
+      ...taskRows.map((_, index) => `<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/xl/worksheets/sheet${index + 3}.xml" Id="rId${index + 3}" />`),
+    ].join('')
+    const workbookRels = `<?xml version="1.0" encoding="utf-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`
+    const overrides = Array.from({ length: taskRows.length + 2 }, (_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />`).join('')
+    const contentTypes = `<?xml version="1.0" encoding="utf-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml" /><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" /><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml" /><Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml" /><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml" />${overrides}</Types>`
+    const entries: { name: string; data: Uint8Array }[] = requiredBase.map((name) => {
+      const data = baseEntries.get(name)
+      if (!data) throw new Error(`Excel 기본 양식 구성 요소가 없습니다: ${name}`)
+      return { name, data }
+    })
+    entries.push(
+      { name: '[Content_Types].xml', data: encoder.encode(contentTypes) },
+      { name: 'xl/workbook.xml', data: encoder.encode(workbookXml) },
+      { name: 'xl/_rels/workbook.xml.rels', data: encoder.encode(workbookRels) },
+      { name: 'xl/worksheets/sheet1.xml', data: encoder.encode(peerReviewGuideXml()) },
+      { name: 'xl/worksheets/sheet2.xml', data: encoder.encode(peerReviewMetaXml(input.periodLabel, reviewer.name)) },
+      ...taskRows.map(({ task, participants }, index) => ({ name: `xl/worksheets/sheet${index + 3}.xml`, data: encoder.encode(peerReviewTaskXml(task, input.periodLabel, reviewer, participants, input.includeGrade)) })),
+    )
+    files.push({ name: `${input.periodFileName}_피어리뷰_${reviewer.name}.xlsx`, data: zipStoredFileBytes(entries) })
+    generated.push(reviewer.name)
+  }
+  return { files, generated }
+}
+
+export function createMemberPeerReviewTemplateFiles({
+  projectId: _projectId, periodLabel, periodFileName, tasks, members, contributions, includeGrade, participantIdsByTask,
+}: MemberPeerReviewTemplateInput) {
   const generated: string[] = []
   const files: { name: string; data: Uint8Array }[] = []
   for (const reviewer of members) {
@@ -715,16 +945,20 @@ export async function downloadMemberPeerReviewTemplates({
       ['2', '기여도는 팀원 수에 맞춰 100%로 균등 배분되어 있으며 필요하면 조정할 수 있습니다.'],
       ['3', '근거에는 관찰한 행동이나 결과를 짧고 구체적으로 작성합니다.'],
     ])
-    guide['!cols'] = [{ wch: 14 }, { wch: 68 }]
-    guide['!rows'] = [{ hpt: 32 }, { hpt: 24 }, { hpt: 24 }, { hpt: 10 }, { hpt: 26 }, { hpt: 28 }, { hpt: 28 }, { hpt: 28 }]
-    guide['!merges'] = [XLSX.utils.decode_range('A1:B1')]
+    applyPeerReviewGuideLayout(guide)
     XLSX.utils.book_append_sheet(wb, guide, '안내')
     const meta = XLSX.utils.aoa_to_sheet([
       ['구분', '값'], ['평가기간', periodLabel], ['평가자', reviewer.name], ['양식버전', 5],
     ])
     XLSX.utils.book_append_sheet(wb, meta, '_메타')
     tasks.forEach((task, taskIndex) => {
-      const participants = members
+      const assignedParticipants = peerReviewParticipants(task.id, members, contributions)
+      const defaultParticipants = assignedParticipants.length > 0 ? assignedParticipants : members
+      const selectedIds = participantIdsByTask?.[task.id]
+      const participants = selectedIds
+        ? members.filter((member) => selectedIds.includes(member.id))
+        : defaultParticipants
+      if (participants.length === 0) return
       const equalPercentages = evenlyDistributedPercentages(participants.length)
       const headers = includeGrade ? ['평가 대상', '기여도(%)', '수행등급', '근거'] : ['평가 대상', '기여도(%)', '근거']
       const rows: unknown[][] = [
@@ -746,10 +980,18 @@ export async function downloadMemberPeerReviewTemplates({
     })
     wb.Workbook = { Sheets: wb.SheetNames.map((name) => ({ name, Hidden: name === '_메타' ? 1 : 0 })) }
     const filename = `${periodFileName}_피어리뷰_${reviewer.name}.xlsx`
-    files.push({ name: filename, data: new Uint8Array(XLSX.write(wb, { bookType: 'xlsx', type: 'array' })) })
+    files.push({ name: filename, data: new Uint8Array(XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true })) })
     generated.push(reviewer.name)
   }
-  if (files.length > 0) downloadBlob(zipStoredFiles(files), `${periodFileName}_피어리뷰_전체.zip`)
+  return { files, generated }
+}
+
+export async function downloadMemberPeerReviewTemplates(input: MemberPeerReviewTemplateInput) {
+  const template = await loadStaticTemplateFile('peerReviews')
+  const { files, generated } = template
+    ? await createStyledMemberPeerReviewTemplateFiles(input, template.data)
+    : createMemberPeerReviewTemplateFiles(input)
+  if (files.length > 0) downloadBlob(zipStoredFiles(files), `${input.periodFileName}_피어리뷰_전체.zip`)
   return generated
 }
 

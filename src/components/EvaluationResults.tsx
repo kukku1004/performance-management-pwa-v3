@@ -35,7 +35,7 @@ const GRADE_ORDER: Record<EvaluationGrade, number> = {
 
 export default function EvaluationResults() {
   const { state } = useAppState()
-  const { activeProject } = useWorkspace()
+  const { activeProject, activeTeam, workspace } = useWorkspace()
   const { tasks, members, contributions, criteria, peerReviews } = state
   const [searchQuery, setSearchQuery] = useState('')
   const [levelFilter, setLevelFilter] = useState('all')
@@ -45,8 +45,34 @@ export default function EvaluationResults() {
   const periodName = activeProject ? evaluationPeriodFolderName(activeProject.period) : String(new Date().getFullYear())
 
   const currentYear = new Date().getFullYear()
+  const evaluationYear = activeProject?.period.year ?? currentYear
   const taskScores = calcAllTaskScores(tasks, criteria)
   const memberResults = calcMemberResults(members, tasks, contributions, criteria, peerReviews)
+  const previousGrades = useMemo(() => {
+    const previousYear = evaluationYear - 1
+    const projectResults = workspace.projects
+      .filter((project) => project.teamId === activeTeam?.id && project.id !== activeProject?.id && project.period.year === previousYear)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((project) => ({
+        members: project.appState.members,
+        results: calcMemberResults(project.appState.members, project.appState.tasks, project.appState.contributions, project.appState.criteria, project.appState.peerReviews),
+      }))
+
+    return new Map(members.flatMap((member) => {
+      for (const project of projectResults) {
+        const previousMember = project.members.find((item) => item.id === member.id)
+          ?? project.members.find((item) => item.name.trim() === member.name.trim())
+        const result = previousMember && project.results.find((item) => item.member.id === previousMember.id)
+        if (result) return [[member.id, result.grade] as const]
+      }
+
+      const storedRecord = activeTeam?.growthProfiles
+        .find((profile) => profile.memberId === member.id)
+        ?.performanceHistory?.find((record) => record.year === previousYear)
+      const storedGrade = storedRecord?.secondHalf ?? storedRecord?.firstHalf ?? null
+      return storedGrade ? [[member.id, storedGrade] as const] : []
+    }))
+  }, [activeProject?.id, activeTeam, evaluationYear, members, workspace.projects])
   const availableLevels = Array.from(
     new Set(memberResults.map((row) => row.member.level).filter((level) => level !== '')),
   )
@@ -163,6 +189,8 @@ export default function EvaluationResults() {
               )}
               {visibleResults.map((row) => {
                 const isExpanded = expandedMemberId === row.member.id
+                const previousGrade = previousGrades.get(row.member.id)
+                const gradeChange = previousGrade ? GRADE_ORDER[previousGrade] - GRADE_ORDER[row.grade] : null
                 const detailRows = taskScores.flatMap(({ task, score }) => {
                   const contribution = getContribution(contributions, task.id, row.member.id)
                   if (!contribution || contribution.contributionPercent <= 0) return []
@@ -186,8 +214,10 @@ export default function EvaluationResults() {
                       <td className="text-center">
                         <Badge tone={GRADE_TONES[row.grade]}>{row.grade}</Badge>
                       </td>
-                      <td className="text-center text-gray-400">-</td>
-                      <td className="text-center text-gray-400">-</td>
+                      <td className="text-center">{previousGrade ? <Badge tone={GRADE_TONES[previousGrade]}>{previousGrade}</Badge> : <span className="text-gray-400">-</span>}</td>
+                      <td className={`text-center text-xs font-semibold ${gradeChange === null || gradeChange === 0 ? 'text-gray-500' : gradeChange > 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                        {gradeChange === null ? '-' : gradeChange > 0 ? `▲ ${gradeChange}` : gradeChange < 0 ? `▼ ${Math.abs(gradeChange)}` : '유지'}
+                      </td>
                       <td className="text-center"><Badge tone="neutral">평가중</Badge></td>
                       <td className="text-right">
                         <button

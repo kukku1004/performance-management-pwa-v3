@@ -42,6 +42,12 @@ export interface MeetingNote {
   date: string
   comment: string
   mood?: string
+  growthPoints?: {
+    strength: string
+    improvement: string
+    challenge: string
+    careerGoal: string
+  }
 }
 
 export interface PeerReview {

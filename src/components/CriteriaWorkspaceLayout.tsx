@@ -1,7 +1,8 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react'
 import CriteriaRail from './CriteriaRail'
+import { COLLAPSED_PANEL_WIDTH, PANEL_SPLITTER_WIDTH, PanelSplitter } from './PanelControls'
 
-const ICON_WIDTH = 56
+const ICON_WIDTH = COLLAPSED_PANEL_WIDTH
 const FULL_WIDTH = 320
 const MAX_WIDTH = 480
 const COLLAPSE_THRESHOLD = (ICON_WIDTH + FULL_WIDTH) / 2
@@ -41,9 +42,9 @@ export default function CriteriaWorkspaceLayout({ children }: { children: ReactN
     setDragWidth(null)
   }
 
-  return <div className="-my-8 grid min-h-[calc(100vh-4rem)] overflow-hidden bg-white" style={{ gridTemplateColumns: `${width}px 6px minmax(0,1fr)` }}>
+  return <div className="-my-8 grid min-h-[calc(100vh-4rem)] overflow-hidden bg-white" style={{ gridTemplateColumns: `${width}px ${PANEL_SPLITTER_WIDTH}px minmax(0,1fr)` }}>
     <CriteriaRail collapsed={size === 'icon'} onExpand={() => setSize('full')} onCollapse={() => setSize('icon')} />
-    <button type="button" aria-label="평가기준 영역 너비 조절" onPointerDown={startResize} onPointerMove={moveResize} onPointerUp={endResize} onPointerCancel={endResize} style={{ touchAction: 'none' }} className="group flex min-h-full cursor-col-resize items-center justify-center self-stretch border-x border-gray-200 bg-gray-50 transition-colors hover:bg-orange-50"><span className="h-10 w-0.5 rounded-full bg-gray-300 group-hover:bg-orange-400" /></button>
+    <PanelSplitter aria-label="평가기준 영역 너비 조절" onPointerDown={startResize} onPointerMove={moveResize} onPointerUp={endResize} onPointerCancel={endResize} />
     <div className="min-w-0 bg-white py-8 pl-5">{children}</div>
   </div>
 }

@@ -9,16 +9,42 @@ import {
 } from './fullBackup'
 import { evaluationPeriodFolderName, migrateWorkspace } from './workspace'
 
-const DRIVE_SCOPE = 'openid email https://www.googleapis.com/auth/drive.file'
+const GOOGLE_SCOPE = 'openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar'
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const SHEET_MIME = 'application/vnd.google-apps.spreadsheet'
 const APP_ID = 'performance-management-pwa-v3'
+const GOOGLE_SESSION_KEY = 'performance-management-v3-google-session'
+const GOOGLE_CONNECTION_HINT_KEY = 'performance-management-v3-google-connected'
+const GOOGLE_ACCOUNT_KEY = 'performance-management-v3-google-account'
 
-let accessToken = ''
+interface StoredGoogleSession {
+  accessToken: string
+  expiresAt: number
+  email: string
+}
+
+function readStoredGoogleSession(): StoredGoogleSession | null {
+  try {
+    const raw = sessionStorage.getItem(GOOGLE_SESSION_KEY)
+    if (!raw) return null
+    const value = JSON.parse(raw) as Partial<StoredGoogleSession>
+    if (!value.accessToken || !value.email || !value.expiresAt || value.expiresAt <= Date.now() + 60_000) {
+      sessionStorage.removeItem(GOOGLE_SESSION_KEY)
+      return null
+    }
+    return value as StoredGoogleSession
+  } catch {
+    return null
+  }
+}
+
+const storedGoogleSession = readStoredGoogleSession()
+let accessToken = storedGoogleSession?.accessToken ?? ''
+let accessTokenExpiresAt = storedGoogleSession?.expiresAt ?? 0
 let tokenClient: GoogleTokenClient | null = null
-let connectedAccount: GoogleAccount | null = null
+let connectedAccount: GoogleAccount | null = storedGoogleSession ? { email: storedGoogleSession.email } : null
 
 export interface GoogleAccount {
   email: string
@@ -26,6 +52,7 @@ export interface GoogleAccount {
 
 interface GoogleTokenResponse {
   access_token?: string
+  expires_in?: number
   error?: string
   error_description?: string
 }
@@ -121,14 +148,34 @@ export function isGoogleDriveConfigured(): boolean {
 }
 
 export function isGoogleDriveConnected(): boolean {
-  return Boolean(accessToken)
+  if (!accessToken || accessTokenExpiresAt <= Date.now() + 60_000) {
+    accessToken = ''
+    accessTokenExpiresAt = 0
+    connectedAccount = null
+    try { sessionStorage.removeItem(GOOGLE_SESSION_KEY) } catch { /* Ignore unavailable storage. */ }
+    return false
+  }
+  return true
+}
+
+export function hasGoogleDriveConnectionHint(): boolean {
+  try { return localStorage.getItem(GOOGLE_CONNECTION_HINT_KEY) === '1' } catch { return false }
+}
+
+export function getRememberedGoogleAccount(): GoogleAccount | null {
+  try {
+    const email = localStorage.getItem(GOOGLE_ACCOUNT_KEY)?.trim()
+    return email ? { email } : null
+  } catch {
+    return null
+  }
 }
 
 export function getConnectedGoogleAccount(): GoogleAccount | null {
   return connectedAccount
 }
 
-export async function connectGoogleDrive(prompt: 'consent' | 'select_account' = 'consent'): Promise<void> {
+export async function connectGoogleDrive(prompt: 'consent' | 'select_account' | '' = 'consent', rememberConnection = true): Promise<void> {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
   if (!clientId) throw new Error('VITE_GOOGLE_CLIENT_ID가 설정되지 않았습니다.')
   await loadIdentityScript()
@@ -137,13 +184,14 @@ export async function connectGoogleDrive(prompt: 'consent' | 'select_account' = 
   await new Promise<void>((resolve, reject) => {
     tokenClient = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: DRIVE_SCOPE,
+      scope: GOOGLE_SCOPE,
       callback: (response) => {
         if (!response.access_token) {
           reject(new Error(response.error_description || response.error || 'Google Drive 연결에 실패했습니다.'))
           return
         }
         accessToken = response.access_token
+        accessTokenExpiresAt = Date.now() + (response.expires_in ?? 3600) * 1000
         fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
           headers: { Authorization: `Bearer ${accessToken}` },
         })
@@ -152,10 +200,22 @@ export async function connectGoogleDrive(prompt: 'consent' | 'select_account' = 
             const account = await accountResponse.json() as { email?: string }
             if (!account.email) throw new Error('Google 계정 이메일을 확인하지 못했습니다.')
             connectedAccount = { email: account.email }
+            try {
+              if (rememberConnection) {
+                sessionStorage.setItem(GOOGLE_SESSION_KEY, JSON.stringify({ accessToken, expiresAt: accessTokenExpiresAt, email: account.email }))
+                localStorage.setItem(GOOGLE_CONNECTION_HINT_KEY, '1')
+                localStorage.setItem(GOOGLE_ACCOUNT_KEY, account.email)
+              } else {
+                sessionStorage.removeItem(GOOGLE_SESSION_KEY)
+                localStorage.removeItem(GOOGLE_CONNECTION_HINT_KEY)
+                localStorage.removeItem(GOOGLE_ACCOUNT_KEY)
+              }
+            } catch { /* Connection still works when storage is unavailable. */ }
             resolve()
           })
           .catch((error) => {
             accessToken = ''
+            accessTokenExpiresAt = 0
             reject(error)
           })
       },
@@ -168,8 +228,13 @@ export async function connectGoogleDrive(prompt: 'consent' | 'select_account' = 
 export function disconnectGoogleDrive() {
   if (accessToken && window.google) window.google.accounts.oauth2.revoke(accessToken)
   accessToken = ''
+  accessTokenExpiresAt = 0
   tokenClient = null
   connectedAccount = null
+  try {
+    sessionStorage.removeItem(GOOGLE_SESSION_KEY)
+    localStorage.removeItem(GOOGLE_CONNECTION_HINT_KEY)
+  } catch { /* Ignore unavailable storage. */ }
 }
 
 async function driveFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -188,6 +253,23 @@ async function driveFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
+}
+
+export async function googleAuthorizedFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
+  if (!accessToken) throw new Error('먼저 Google 계정을 연결하세요.')
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: { message?: string } } | null
+    throw new Error(body?.error?.message || `Google API 요청에 실패했습니다. (${response.status})`)
+  }
+  return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 
 function escapeQueryValue(value: string): string {

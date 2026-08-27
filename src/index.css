@@ -2,6 +2,83 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 빠른 시작은 탭과 업로드 결과에 따라 본체 크기가 변하지 않는다. */
+.quick-start-modal {
+  width: min(960px, calc(100vw - 32px)) !important;
+  height: min(680px, calc(100dvh - 32px));
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0;
+}
+
+.quick-start-upload-drawer {
+  position: fixed;
+  top: 50%;
+  left: calc(50% + 492px);
+  z-index: 80;
+  display: flex;
+  width: 320px;
+  max-height: min(680px, calc(100dvh - 32px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgb(15 23 42 / 16%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-12px, -50%);
+  transition: transform 180ms ease, opacity 180ms ease, visibility 180ms ease;
+}
+
+.quick-start-upload-drawer.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(0, -50%);
+}
+
+.quick-start-upload-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.quick-start-upload-drawer-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 1320px) {
+  .quick-start-upload-drawer {
+    right: 16px;
+    left: auto;
+    width: min(320px, calc(100vw - 32px));
+  }
+}
+
+@media (max-width: 720px) {
+  .quick-start-modal {
+    width: calc(100vw - 16px) !important;
+    height: calc(100dvh - 16px);
+  }
+
+  .quick-start-upload-drawer {
+    inset: 8px;
+    width: auto;
+    max-height: none;
+    transform: translateY(12px);
+  }
+
+  .quick-start-upload-drawer.is-open {
+    transform: translateY(0);
+  }
+}
+
 .meeting-responsive {
   display: grid;
   grid-template-areas:
@@ -54,39 +131,37 @@
 
 .meeting-focus-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 392px);
-  grid-template-areas:
-    "member scores"
-    "memos memos";
+  grid-template-columns: minmax(0, 1fr) 392px;
   align-items: center;
-  column-gap: 24px;
-  row-gap: 10px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 10px;
+  border-bottom: 1px solid #e2e8f0;
   background: #fff;
-  padding: 10px 0 12px;
+  padding-bottom: 16px;
 }
 
-.meeting-focus-member-title { grid-area: member; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-.meeting-focus-member-title h2 { color: #111827; font-size: 20px; font-weight: 700; line-height: 1.25; }
-.meeting-focus-member-title span { color: #6b7280; font-size: 14px; }
-.meeting-focus-memos { grid-area: memos; display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px; }
+.meeting-focus-profile { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 12px; padding: 0; }
+.meeting-focus-member-title { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.meeting-focus-member-title h2 { color: #1e293b; font-size: 20px; font-weight: 700; line-height: normal; }
+.meeting-focus-member-title span { color: #64748b; font-size: 13px; line-height: normal; }
+.meeting-focus-memos { display: flex; min-width: 0; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 
 .meeting-focus-score-grid {
-  grid-area: scores;
   display: grid;
-  width: min(100%, 392px);
+  width: 392px;
   flex-shrink: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 87px minmax(0, 1fr) minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   background: #fff;
 }
 
-.meeting-focus-score-grid > div { min-width: 0; padding: 13px 16px; }
-.meeting-focus-score-grid > div + div { border-left: 1px solid #e5e7eb; }
-.meeting-focus-score-grid p { color: #64748b; font-size: 11px; font-weight: 600; }
-.meeting-focus-score-grid strong { display: block; margin-top: 5px; color: #0f172a; font-size: 20px; font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
+.meeting-focus-score-grid > div { min-width: 0; padding: 16px; }
+.meeting-focus-score-grid > div + div { border-left: 1px solid #e2e8f0; }
+.meeting-focus-score-grid p { color: #64748b; font-size: 12px; font-weight: 500; line-height: normal; }
+.meeting-focus-score-grid strong { display: block; margin-top: 8px; color: #1e293b; font-size: 20px; line-height: normal; font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meeting-focus-score-result { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.meeting-focus-score-result strong { margin-top: 8px; }
 .meeting-focus-score-grid em { font-size: 12px; font-style: normal; font-weight: 700; }
 
 .meeting-focus-workspace {
@@ -97,43 +172,69 @@
 }
 
 .meeting-focus-timeline { min-width: 0; overflow: visible; padding: 0 8px 96px; }
+.meeting-focus-calendar-divider { min-height: 100%; background: #e5e7eb; }
+.meeting-focus-history-sidebar { min-width: 0; overflow: visible; background: #fff; padding: 140px 0 96px; }
+.meeting-focus-history-count { display: flex; height: 28px; align-items: center; justify-content: flex-start; gap: 5px; color: #374151; }
 .meeting-focus-document { min-width: 0; overflow-y: auto; padding: 24px 28px 96px; }
 .meeting-focus-reference { min-width: 0; overflow: hidden; background: #f9fafb; }
 .meeting-focus-content { min-width: 0; }
 .meeting-focus-content-expanded { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.1fr); gap: 28px; align-items: start; margin-top: 24px; }
 .meeting-focus-content-expanded .meeting-focus-context { grid-column: 1; grid-row: 1; }
 .meeting-focus-content-expanded .meeting-focus-compose { grid-column: 2; grid-row: 1; }
+.meeting-focus-content-expanded .meeting-focus-compose textarea { min-height: clamp(360px, 48vh, 600px); }
 .meeting-focus-content-expanded .meeting-focus-context > :first-child,
 .meeting-focus-content-expanded .meeting-focus-compose > :first-child { margin-top: 0; }
 
-.meeting-focus-splitter {
+.ui-panel-splitter {
+  position: relative;
   display: flex;
+  min-width: 9px;
   min-height: 100%;
+  touch-action: none;
   cursor: col-resize;
   align-items: center;
   justify-content: center;
-  border-inline: 1px solid #e5e7eb;
-  background: #f9fafb;
+  align-self: stretch;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
+.ui-panel-splitter::before {
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 1px;
+  content: '';
+  background: #e5e7eb;
+  transform: translateX(-50%);
+  transition: background-color 120ms ease;
+}
+.ui-panel-splitter span {
+  position: relative;
+  z-index: 1;
+  width: 3px;
+  height: 36px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+.ui-panel-splitter:hover::before,
+.ui-panel-splitter:focus-visible::before { background: #fb923c; }
+.ui-panel-splitter:hover span,
+.ui-panel-splitter:focus-visible span { background: #fed7aa; }
 
-.meeting-focus-splitter:hover { background: #fff7ed; }
-.meeting-focus-splitter span { width: 2px; height: 40px; border-radius: 999px; background: #d1d5db; }
-.meeting-focus-splitter:hover span { background: #fb923c; }
-
-.meeting-focus-history-rail { position: relative; min-height: 360px; padding: 2px 0 24px; }
-.meeting-focus-history-mark { position: relative; display: flex; width: 100%; align-items: center; padding: 8px 0; color: #9ca3af; text-align: left; }
-.meeting-focus-history-tick { width: 18px; height: 1px; background: #d1d5db; transition: width 120ms ease, background 120ms ease; }
+.meeting-focus-history-rail { position: relative; min-height: 360px; padding: 4px 0 24px; }
+.meeting-focus-history-mark { position: relative; display: flex; width: 100%; align-items: center; justify-content: flex-start; padding: 7px 0; color: #9ca3af; text-align: left; }
+.meeting-focus-history-tick { width: 14px; height: 2px; border-radius: 999px; background: var(--history-color, #d1d5db); transition: width 120ms ease, background 120ms ease; }
 .meeting-focus-history-mark:hover .meeting-focus-history-tick,
-.meeting-focus-history-mark-active .meeting-focus-history-tick { width: 34px; height: 2px; background: #111827; }
+.meeting-focus-history-mark-active .meeting-focus-history-tick { width: 38px; background: var(--history-color, #111827); }
 .meeting-focus-history-mark-active { color: #111827; }
-.meeting-focus-history-tooltip { position: absolute; left: 34px; top: 50%; z-index: 50; display: none; width: 230px; transform: translateY(-50%); border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 12px; color: #111827; font-size: 11px; box-shadow: 0 8px 24px rgb(15 23 42 / 10%); }
+.meeting-focus-history-tooltip { position: absolute; left: 52px; top: 50%; z-index: 50; display: none; width: 240px; transform: translateY(-50%); border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; padding: 12px; color: #111827; font-size: 11px; box-shadow: 0 10px 30px rgb(15 23 42 / 12%); }
 .meeting-focus-history-mark:hover .meeting-focus-history-tooltip,
 .meeting-focus-history-mark:focus-visible .meeting-focus-history-tooltip { display: block; }
 
 @media (max-width: 1100px) {
   .meeting-focus-document { padding-inline: 20px; }
-  .meeting-focus-summary { grid-template-columns: 1fr; grid-template-areas: "member" "scores" "memos"; align-items: stretch; }
-  .meeting-focus-score-grid { width: 100%; }
 }
 
 @media (max-width: 1480px) {

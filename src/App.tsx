@@ -18,7 +18,8 @@ export default function App() {
 }
 
 function WorkspaceRouter() {
-  const { connected, activeProject, updateProjectState } = useWorkspace()
+  const { connected, activeProject, restoringConnection, updateProjectState } = useWorkspace()
+  if (restoringConnection) return <div className="flex min-h-screen items-center justify-center bg-gray-50"><div className="text-center"><span className="mx-auto block h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900" /><p className="mt-3 text-sm text-gray-500">기존 Google 계정으로 연결 중입니다.</p></div></div>
   if (!connected || !activeProject) return <WorkspaceStart />
 
   return (
@@ -56,7 +57,14 @@ function ProjectApp() {
         {activeTab === 'notes' && <MeetingNotes />}
       </main></CriteriaWorkspaceProvider>
       <GoogleDriveDialog open={dataManagementOpen} state={state} periodName={periodName} onPeriodNameChange={setPeriodName} onRestore={(restoredState) => dispatch({ type: 'LOAD_STATE', payload: restoredState })} onResetWorkspace={resetWorkspace} teamName={activeTeam?.name} projectId={activeProject?.id ?? ''} periodLabel={activeProject ? formatEvaluationPeriod(activeProject.period) : periodName} onClose={() => setDataManagementOpen(false)} />
-      <ProjectSetupStart open={quickStartOpen} onClose={() => setQuickStartOpen(false)} />
+      <ProjectSetupStart
+        open={quickStartOpen}
+        onClose={() => setQuickStartOpen(false)}
+        onStartEvaluation={() => {
+          setQuickStartOpen(false)
+          handleTabChange('matrix')
+        }}
+      />
     </div>
   )
 }
