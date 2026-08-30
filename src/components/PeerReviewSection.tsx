@@ -291,7 +291,7 @@ export default function PeerReviewSection() {
           <span className="text-sm text-gray-500">{submittedCount} / {expectedCount}명 제출</span>
         </div>
         <div className="flex gap-2">
-          <button type="button" disabled={!ready} onClick={openTemplateDialog} className="ui-button ui-button-primary">팀원별 양식 만들기</button>
+          <button type="button" disabled={!ready} onClick={openTemplateDialog} className={`ui-button ${submittedCount > 0 ? 'ui-button-secondary' : 'ui-button-primary'}`}>팀원별 양식 만들기</button>
           <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">결과 업로드</button>
           <button type="button" aria-haspopup="dialog" onClick={() => setEditorOpen(true)} className="ui-button ui-button-ghost">값 조정</button>
           <input ref={inputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { void upload(event.target.files); event.target.value = '' }} />
