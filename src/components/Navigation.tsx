@@ -3,6 +3,7 @@ import { formatEvaluationPeriod } from '../utils/workspace'
 import Badge from './Badge'
 import { useState } from 'react'
 import { isAdminEmail } from '../utils/admin'
+import TeamInviteDialog from './TeamInviteDialog'
 
 export type TabKey = 'tasks' | 'members' | 'matrix' | 'results' | 'notes'
 
@@ -26,6 +27,7 @@ export default function Navigation({ activeTab, onTabChange, onOpenDataManagemen
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [accountBusy, setAccountBusy] = useState(false)
+  const [teamInviteOpen, setTeamInviteOpen] = useState(false)
   const saveLabel = saveStatus === 'saved' ? '저장됨' : saveStatus === 'saving' ? '저장 중' : saveStatus === 'error' ? '저장 실패' : '저장하지 않은 변경사항'
   return (
     <header className="border-b border-gray-200 bg-white">
@@ -63,6 +65,7 @@ export default function Navigation({ activeTab, onTabChange, onOpenDataManagemen
                   <a href={`https://calendar.google.com/calendar/u/0/r?authuser=${encodeURIComponent(account.email)}`} target="_blank" rel="noreferrer" onClick={() => setAccountMenuOpen(false)} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-950"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M6 3v3M18 3v3M4 8h16M5 5h14v15H5z"/><path d="M8 12h3v3H8z"/></svg>Google Calendar</a>
                   <a href={`https://mail.google.com/mail/u/0/?authuser=${encodeURIComponent(account.email)}`} target="_blank" rel="noreferrer" onClick={() => setAccountMenuOpen(false)} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-950"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M3 6h18v12H3z"/><path d="m4 7 8 6 8-6"/></svg>Gmail</a>
                   <a href={`https://drive.google.com/drive/u/0/my-drive?authuser=${encodeURIComponent(account.email)}`} target="_blank" rel="noreferrer" onClick={() => setAccountMenuOpen(false)} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-950"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="m9 3-6 11 4 7h10l4-7-6-11z"/><path d="M7 14h14M9 3l8 18"/></svg>Google Drive</a>
+                  {isAdminEmail(account.email) && <button type="button" onClick={() => { setAccountMenuOpen(false); setTeamInviteOpen(true) }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-950"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>팀원 초대</button>}
                 </div>
                 <button type="button" disabled={accountBusy} onClick={() => { setAccountBusy(true); void switchAccount().then(() => setAccountMenuOpen(false)).catch(() => undefined).finally(() => setAccountBusy(false)) }} className="ui-button ui-button-secondary mt-1 w-full justify-center">{accountBusy ? '계정 선택 중…' : '+ 다른 Google 계정 연결'}</button>
               </div>}
@@ -75,6 +78,7 @@ export default function Navigation({ activeTab, onTabChange, onOpenDataManagemen
             <button type="button" onClick={() => void logout()} className="ui-button ui-button-ghost ui-button-sm">로그아웃</button>
           </div>
       </div>
+      {teamInviteOpen && account?.email && isAdminEmail(account.email) && <TeamInviteDialog adminEmail={account.email} onClose={() => setTeamInviteOpen(false)} />}
     </header>
   )
 }

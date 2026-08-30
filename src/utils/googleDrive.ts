@@ -9,7 +9,7 @@ import {
 } from './fullBackup'
 import { evaluationPeriodFolderName, migrateWorkspace } from './workspace'
 
-const GOOGLE_SCOPE = 'openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar'
+const GOOGLE_SCOPE = 'openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send'
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
@@ -270,6 +270,31 @@ export async function googleAuthorizedFetch<T>(url: string, init: RequestInit = 
     throw new Error(body?.error?.message || `Google API 요청에 실패했습니다. (${response.status})`)
   }
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
+}
+
+function encodeBase64Url(value: string) {
+  const bytes = new TextEncoder().encode(value)
+  let binary = ''
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+export async function sendGoogleInvitationEmails(recipients: string[], subject: string, body: string) {
+  const sent: string[] = []
+  const failed: Array<{ email: string; error: string }> = []
+  for (const email of recipients) {
+    try {
+      const message = [`To: ${email}`, `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`, 'Content-Type: text/plain; charset=UTF-8', '', body].join('\r\n')
+      await googleAuthorizedFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        body: JSON.stringify({ raw: encodeBase64Url(message) }),
+      })
+      sent.push(email)
+    } catch (error) {
+      failed.push({ email, error: error instanceof Error ? error.message : '발송 실패' })
+    }
+  }
+  return { sent, failed }
 }
 
 function escapeQueryValue(value: string): string {
