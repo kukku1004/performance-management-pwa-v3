@@ -39,6 +39,7 @@ export default function TeamManagement() {
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
   const [activeView, setActiveView] = useState<'members' | 'peer'>('members')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const hasMembers = state.members.length > 0
 
   function normalizeName(value: string) { return value.trim().normalize('NFC') }
 
@@ -107,16 +108,17 @@ export default function TeamManagement() {
           </div>
           <button type="button" role="tab" aria-selected={activeView === 'peer'} onClick={() => setActiveView('peer')} className={`border-b-2 px-5 pb-3 pt-1 transition-colors ${activeView === 'peer' ? 'border-gray-950 text-lg font-semibold text-gray-950' : 'border-transparent text-sm font-medium text-gray-500 hover:text-gray-800'}`}>피어리뷰</button>
         </div>
-        {activeView === 'members' && <div className="flex flex-wrap items-center gap-2"><button onClick={downloadMemberTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button><button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button><input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>}
+        {activeView === 'members' && <div className="flex flex-wrap items-center gap-2"><button onClick={downloadMemberTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button>{hasMembers && <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button>}<input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>}
       </div>
 
       {activeView === 'peer' ? <PeerReviewSection /> : <>
 
-      {uploadOpen && <FileDropZone
-        title="팀원 Excel 파일을 여기에 드래그"
-        description="이름·직책·직급·연차·역할·코멘트를 현재 평가의 팀원 정보에 반영합니다."
+      {(!hasMembers || uploadOpen) && <FileDropZone
+        title={hasMembers ? '팀원 Excel 파일을 여기에 드래그' : '등록된 팀원이 없습니다.'}
+        description={hasMembers ? '이름·직책·직급·연차·역할·코멘트를 현재 평가의 팀원 정보에 반영합니다.' : '아래 입력 영역에서 직접 등록할 수 있습니다.\n또는\n이 영역을 클릭하거나 파일을 드래그하여 한 번에 등록할 수 있습니다.'}
         onClick={() => fileInputRef.current?.click()}
         onDrop={(event) => { event.preventDefault(); void importMemberFile(event.dataTransfer.files[0]) }}
+        className={!hasMembers ? 'cursor-pointer bg-gray-50 hover:border-orange-300 hover:bg-orange-50/30' : 'cursor-pointer'}
       />}
 
       {importResult && (
@@ -131,15 +133,7 @@ export default function TeamManagement() {
         />
       )}
 
-      {state.members.length === 0 ? (
-        <p className="ui-empty">
-          등록된 팀원이 없습니다.
-          <br />
-          아래 입력 영역에서 직접 등록하거나,
-          <br />
-          위의 '엑셀로 업로드' 버튼으로 여러 팀원을 한 번에 등록할 수 있습니다.
-        </p>
-      ) : (
+      {hasMembers ? (
       <div className="ui-table-wrap">
         <table className="ui-table min-w-[900px]">
           <thead>
@@ -208,7 +202,7 @@ export default function TeamManagement() {
           </tbody>
         </table>
       </div>
-      )}
+      ) : null}
 
       <section className="rounded-lg border border-gray-200 bg-white p-4" aria-label="팀원 추가">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_2fr_2fr_auto]">

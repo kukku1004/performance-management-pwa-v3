@@ -93,8 +93,8 @@ export default function TaskManagement() {
         <div className="flex flex-wrap items-center gap-2"><button onClick={downloadTaskTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button>{hasTasks && <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button>}<input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>
       </div>
       {(!hasTasks || uploadOpen) && <FileDropZone
-        title={hasTasks ? '과제 Excel 파일을 여기에 드래그' : '클릭하여 과제 Excel 파일을 선택하거나 여기에 드래그'}
-        description={hasTasks ? '과제명·과제등급·업무량·목표·성과·성과등급을 현재 평가에 반영합니다.' : 'Excel로 시작하거나 아래에서 첫 과제를 직접 등록할 수 있습니다.'}
+        title={hasTasks ? '과제 Excel 파일을 여기에 드래그' : '등록된 과제가 없습니다.'}
+        description={hasTasks ? '과제명·과제등급·업무량·목표·성과·성과등급을 현재 평가에 반영합니다.' : '아래 입력 영역에서 직접 등록할 수 있습니다.\n또는\n이 영역을 클릭하거나 파일을 드래그하여 한 번에 등록할 수 있습니다.'}
         onClick={() => fileInputRef.current?.click()}
         onDrop={(event) => { event.preventDefault(); void importTaskFile(event.dataTransfer.files[0]) }}
         className={!hasTasks ? 'cursor-pointer bg-gray-50 hover:border-orange-300 hover:bg-orange-50/30' : 'cursor-pointer'}
@@ -173,7 +173,7 @@ export default function TaskManagement() {
           </tbody>
         </table>
       </div>
-      ) : <div className="flex items-center gap-3 py-1 text-xs text-gray-400"><span className="h-px flex-1 bg-gray-200" /><span>또는 첫 과제를 직접 입력</span><span className="h-px flex-1 bg-gray-200" /></div>}
+      ) : null}
 
       <section className="rounded-lg border border-gray-200 bg-white p-4" aria-label="과제 추가">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_2fr_2fr_auto]">

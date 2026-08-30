@@ -56,7 +56,7 @@ export default function FileDropZone({
         <path d="M12.75 3.75V8h4.5" />
       </svg>
       <span className={`mt-3 text-sm font-medium ${isDragging ? 'text-accent' : 'text-gray-700'}`}>{isDragging ? '여기에 놓아 업로드' : title}</span>
-      <span className={`mt-1 text-xs ${isDragging ? 'text-orange-600' : 'text-gray-400'}`}>{isDragging ? '놓으면 바로 파일을 확인합니다.' : description}</span>
+      <span className={`mt-1 whitespace-pre-line text-xs leading-5 ${isDragging ? 'text-orange-600' : 'text-gray-400'}`}>{isDragging ? '놓으면 바로 파일을 확인합니다.' : description}</span>
     </button>
   )
 }
