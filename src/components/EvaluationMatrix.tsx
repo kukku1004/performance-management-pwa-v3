@@ -15,6 +15,7 @@ import { summarizePeerReviews } from '../utils/peerReview'
 import PeerReviewDetailDrawer from './PeerReviewDetailDrawer'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
 import EvaluationNoteButton from './EvaluationNoteButton'
+import LiveRankingPanel from './LiveRankingPanel'
 import TitleHelp from './TitleHelp'
 
 const TASK_MIN_WIDTH = 180
@@ -26,6 +27,7 @@ export default function EvaluationMatrix() {
   const { state, dispatch } = useAppState()
   const { tasks, members, contributions, criteria } = state
   const [detail, setDetail] = useState<{ taskId: string; memberId: string } | null>(null)
+  const [rankingOpen, setRankingOpen] = useState(true)
   const [taskWidth, setTaskWidth] = useState(260)
   const taskResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const contributionEnabled = criteria.contributionWeight > 0
@@ -69,7 +71,9 @@ export default function EvaluationMatrix() {
   return (
     <CriteriaWorkspaceLayout>
     <div className="space-y-3">
-      <header className="flex items-center gap-1.5"><h2 className="ui-page-title">평가 매트릭스</h2><TitleHelp label="과제별 기여도와 개인수행등급을 입력합니다. 참여하지 않은 칸은 비워두고, 과제별 기여도 합계는 100%로 맞춰주세요." /></header>
+      <header className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-1.5"><h2 className="ui-page-title">평가하기</h2><TitleHelp label="과제별 기여도와 개인수행등급을 입력합니다. 참여하지 않은 칸은 비워두고, 과제별 기여도 합계는 100%로 맞춰주세요." /></div>{!rankingOpen && <button type="button" onClick={() => setRankingOpen(true)} className="ui-button ui-button-secondary">실시간 순위 보기</button>}</header>
+
+      <LiveRankingPanel results={results} open={rankingOpen} onClose={() => setRankingOpen(false)} />
 
       {tasks.length === 0 || members.length === 0 ? (
         <p className="ui-empty">
@@ -80,13 +84,13 @@ export default function EvaluationMatrix() {
           <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white">
             <table className="ui-table table-fixed shrink-0" style={{ width: taskWidth + (contributionEnabled ? CONTRIBUTION_WIDTH : 0) }}>
               <colgroup><col style={{ width: taskWidth }} />{contributionEnabled && <col style={{ width: CONTRIBUTION_WIDTH }} />}</colgroup>
-              <thead><tr className="h-[82px]"><th className="relative border-r border-gray-200 bg-white px-4 align-bottom">과제명<button type="button" aria-label="과제명 열 너비 조절" onPointerDown={startTaskResize} onPointerMove={moveTaskResize} onPointerUp={endTaskResize} onPointerCancel={endTaskResize} style={{ touchAction: 'none' }} className="absolute inset-y-0 right-0 w-2 cursor-col-resize border-r border-gray-300 hover:border-orange-400" /></th>{contributionEnabled && <th className="whitespace-nowrap bg-white px-2 text-center align-bottom">기여도</th>}</tr></thead>
+              <thead><tr className="h-14"><th className="relative border-r border-gray-200 bg-white px-4 align-middle">과제명<button type="button" aria-label="과제명 열 너비 조절" onPointerDown={startTaskResize} onPointerMove={moveTaskResize} onPointerUp={endTaskResize} onPointerCancel={endTaskResize} style={{ touchAction: 'none' }} className="absolute inset-y-0 right-0 w-2 cursor-col-resize border-r border-gray-300 hover:border-orange-400" /></th>{contributionEnabled && <th className="whitespace-nowrap bg-white px-2 text-center align-middle">기여도</th>}</tr></thead>
               <tbody>{tasks.map((task) => { const sum = getTaskContributionSum(contributions, task.id); const taskScore = calcTaskScore(task, criteria); const valid = isContributionSumValid(sum); return <tr key={task.id} className="h-16"><td className="border-r border-gray-200 px-4"><div className="line-clamp-2 font-medium">{task.name}</div><div className="mt-0.5 truncate text-xs text-gray-500">{task.importance} · 업무량 {task.workload} · 점수 {taskScore.toFixed(1)}</div></td>{contributionEnabled && <td className={`whitespace-nowrap px-2 text-center font-semibold ${valid ? 'text-success' : 'text-danger'}`}>{sum.toFixed(0)}%</td>}</tr> })}</tbody>
             </table>
             <div className="min-w-0 flex-1 overflow-x-auto">
               <table className="ui-table table-fixed" style={{ width: '100%', minWidth: memberTableMinWidth }}>
                 <colgroup>{members.map((member) => <col key={member.id} style={{ width: `${100 / members.length}%` }} />)}</colgroup>
-                <thead><tr className="h-[82px]">{members.map((member) => { const result = resultByMember.get(member.id); const rank = result ? results.filter((item) => item.performanceScore > result.performanceScore).length + 1 : '-'; return <th key={member.id} className="border-l border-gray-200 px-4 py-3 text-center align-bottom"><div className="font-semibold normal-case tracking-normal text-gray-950">{member.name}</div><div className="mt-1 whitespace-nowrap text-[11px] font-medium normal-case tracking-normal text-gray-500">{rank}위 · {result?.performanceScore.toFixed(1) ?? '0.0'}점 · {result?.grade ?? '-'}</div></th> })}</tr></thead>
+                <thead><tr className="h-14">{members.map((member) => { const result = resultByMember.get(member.id); const rank = result ? results.filter((item) => item.performanceScore > result.performanceScore).length + 1 : '-'; return <th key={member.id} className="border-l border-gray-200 px-4 py-2 text-center align-middle"><div className="font-semibold normal-case tracking-normal text-gray-950">{member.name}</div><div className="mt-0.5 whitespace-nowrap text-[11px] font-medium normal-case tracking-normal text-gray-500">{rank}위 · {result?.performanceScore.toFixed(1) ?? '0.0'}점 · {result?.grade ?? '-'}</div></th> })}</tr></thead>
                 <tbody>{tasks.map((task) => <tr key={task.id} className="h-16">{members.map((member) => {
                         const percent = getContributionPercent(contributions, task.id, member.id)
                         const grade = getPersonalPerformanceGrade(contributions, task.id, member.id)
