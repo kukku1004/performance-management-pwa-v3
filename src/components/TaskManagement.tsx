@@ -34,6 +34,7 @@ export default function TaskManagement() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const hasTasks = state.tasks.length > 0
 
   function addTask() {
     const name = newForm.name.trim()
@@ -89,13 +90,14 @@ export default function TaskManagement() {
     <div className="ui-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5"><h3 className="text-lg font-semibold text-black">과제</h3><TitleHelp label="과제를 추가하거나 삭제하면 평가 매트릭스와 리포트에 즉시 반영됩니다." /></div>
-        <div className="flex flex-wrap items-center gap-2"><button onClick={downloadTaskTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button><button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button><input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>
+        <div className="flex flex-wrap items-center gap-2"><button onClick={downloadTaskTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button>{hasTasks && <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button>}<input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>
       </div>
-      {uploadOpen && <FileDropZone
-        title="과제 Excel 파일을 여기에 드래그"
-        description="과제명·과제등급·업무량·목표·성과·성과등급을 현재 평가에 반영합니다."
+      {(!hasTasks || uploadOpen) && <FileDropZone
+        title={hasTasks ? '과제 Excel 파일을 여기에 드래그' : '클릭하여 과제 Excel 파일을 선택하거나 여기에 드래그'}
+        description={hasTasks ? '과제명·과제등급·업무량·목표·성과·성과등급을 현재 평가에 반영합니다.' : 'Excel로 시작하거나 아래에서 첫 과제를 직접 등록할 수 있습니다.'}
         onClick={() => fileInputRef.current?.click()}
         onDrop={(event) => { event.preventDefault(); void importTaskFile(event.dataTransfer.files[0]) }}
+        className={!hasTasks ? 'cursor-pointer bg-gray-50 hover:border-orange-300 hover:bg-orange-50/30' : 'cursor-pointer'}
       />}
 
       {importResult && (
@@ -110,15 +112,7 @@ export default function TaskManagement() {
         />
       )}
 
-      {state.tasks.length === 0 ? (
-        <p className="ui-empty">
-          등록된 과제가 없습니다.
-          <br />
-          아래 입력 영역에서 직접 등록하거나,
-          <br />
-          위의 '엑셀로 업로드' 버튼으로 여러 과제를 한 번에 등록할 수 있습니다.
-        </p>
-      ) : (
+      {hasTasks ? (
       <div className="ui-table-wrap">
         <table className="ui-table min-w-[820px]">
           <thead>
@@ -179,7 +173,7 @@ export default function TaskManagement() {
           </tbody>
         </table>
       </div>
-      )}
+      ) : <div className="flex items-center gap-3 py-1 text-xs text-gray-400"><span className="h-px flex-1 bg-gray-200" /><span>또는 첫 과제를 직접 입력</span><span className="h-px flex-1 bg-gray-200" /></div>}
 
       <section className="rounded-lg border border-gray-200 bg-white p-4" aria-label="과제 추가">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_2fr_2fr_auto]">
