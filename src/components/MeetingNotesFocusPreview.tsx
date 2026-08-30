@@ -64,7 +64,7 @@ function MoodGlyph({ value, className = 'h-6 w-6' }: { value?: string; className
   return <img src={mood.asset} alt="" className={`${className} block`} />
 }
 const DOCUMENT_USABLE_MIN_WIDTH = 620
-const REFERENCE_USABLE_MIN_WIDTH = 360
+const REFERENCE_USABLE_MIN_WIDTH = 150
 const CALENDAR_RAIL_MIN_WIDTH = 120
 const HISTORY_RAIL_WIDTH = 56
 
@@ -184,7 +184,7 @@ export default function MeetingNotesFocusPreview({
     </div>
 
     <div ref={layoutRef} className={`meeting-focus-workspace ${referencePanelsMinimized ? 'meeting-focus-workspace-expanded' : ''}`} style={{ gridTemplateColumns: referencePanelsMinimized
-      ? `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(0, 1fr) ${PANEL_SPLITTER_WIDTH}px ${COLLAPSED_PANEL_WIDTH * 2 + PANEL_SPLITTER_WIDTH}px`
+      ? `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(0, 1fr) ${PANEL_SPLITTER_WIDTH}px ${COLLAPSED_PANEL_WIDTH}px`
       : `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(${DOCUMENT_USABLE_MIN_WIDTH}px, ${documentWidth}px) ${PANEL_SPLITTER_WIDTH}px minmax(${REFERENCE_USABLE_MIN_WIDTH}px, 1fr)` }}>
       <aside className="meeting-focus-timeline">
         <MeetingCalendar notes={allNotes} members={members} selectedMemberId={selectedMemberId} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
@@ -214,6 +214,7 @@ export default function MeetingNotesFocusPreview({
             <div><p>현재 점수</p><strong>{currentSimulation.currentScore}점</strong></div>
             <div><p>최종 기대 점수</p><span className="meeting-focus-score-result"><strong>{expectedSimulation.currentScore}점</strong><em className={expectedGap >= 0 ? 'text-green-500' : 'text-orange-600'}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</em></span></div>
           </div>
+          <div id="meeting-simulation-trigger" className="flex shrink-0 items-center" />
         </section>
 
         <div className={`meeting-focus-content ${referencePanelsMinimized ? 'meeting-focus-content-expanded' : ''}`}>
@@ -241,7 +242,7 @@ export default function MeetingNotesFocusPreview({
         </div>
       </main>
       <PanelSplitter aria-label="면담일지와 성과·성장 영역 너비 조절" onPointerDown={startResize} />
-      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
+      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight simulationTriggerContainerId="meeting-simulation-trigger" onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
     {printPreviewOpen && <MeetingPrintPreview member={selectedMember} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
   </div>

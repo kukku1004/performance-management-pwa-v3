@@ -1,25 +1,25 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { GrowthPerformanceRecord, TeamMember } from '../types'
 import { PERFORMANCE_GRADE_OPTIONS } from '../types'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory, GRADE_POINTS, mergeProjectHistoryForSimulation } from '../utils/growth'
 import PromotionCriteriaDialog from './PromotionCriteriaDialog'
-import { COLLAPSED_PANEL_WIDTH, PanelToggleIcon } from './PanelControls'
+import { PanelToggleIcon } from './PanelControls'
 
-const PERFORMANCE_USABLE_MIN_WIDTH = 280
+const PERFORMANCE_USABLE_MIN_WIDTH = 150
 const SIMULATION_AUTO_COLLAPSE_WIDTH = 360
 
-export default function MemberGrowthOverview({ member, collapsedContent, onPanelMinimizedChange, hideSummary = false, removeTopSpacing = false, simulationOnRight = false }: { member: TeamMember; compact?: boolean; collapsible?: boolean; collapsedContent?: ReactNode; onPanelMinimizedChange?: (bothMinimized: boolean) => void; hideSummary?: boolean; removeTopSpacing?: boolean; simulationOnRight?: boolean }) {
+export default function MemberGrowthOverview({ member, collapsedContent, onPanelMinimizedChange, hideSummary = false, removeTopSpacing = false, simulationOnRight = false, simulationTriggerContainerId }: { member: TeamMember; compact?: boolean; collapsible?: boolean; collapsedContent?: ReactNode; onPanelMinimizedChange?: (bothMinimized: boolean) => void; hideSummary?: boolean; removeTopSpacing?: boolean; simulationOnRight?: boolean; simulationTriggerContainerId?: string }) {
   const { workspace, activeTeam, saveGrowthProfile } = useWorkspace()
   const [noteInput, setNoteInput] = useState('')
   const [noteAdding, setNoteAdding] = useState(false)
   const [noteColorPicker, setNoteColorPicker] = useState<string | null>(null)
   const [criteriaOpen, setCriteriaOpen] = useState(false)
   const [simulationPanelMinimized, setSimulationPanelMinimized] = useState(Boolean(collapsedContent))
-  const [performancePanelMinimized, setPerformancePanelMinimized] = useState(false)
+  const [performancePanelMinimized, setPerformancePanelMinimized] = useState(Boolean(collapsedContent))
   const panelRef = useRef<HTMLDivElement>(null)
   const performancePanelRef = useRef<HTMLDivElement>(null)
-  const splitLayoutRef = useRef<HTMLDivElement>(null)
   const manualExpandUntilRef = useRef(0)
   const [narrowPanel, setNarrowPanel] = useState(false)
   const [simulationPopupPosition, setSimulationPopupPosition] = useState(() => ({ x: Math.max(24, window.innerWidth - 760), y: 72 }))
@@ -27,7 +27,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
   const [profile, setProfile] = useState(storedProfile ?? getDefaultGrowthProfile(member.id))
 
   useEffect(() => setProfile(storedProfile ?? getDefaultGrowthProfile(member.id)), [member.id, storedProfile])
-  useEffect(() => onPanelMinimizedChange?.(collapsedContent ? false : simulationPanelMinimized && performancePanelMinimized), [collapsedContent, onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
+  useEffect(() => onPanelMinimizedChange?.(collapsedContent ? performancePanelMinimized : simulationPanelMinimized && performancePanelMinimized), [collapsedContent, onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
   useEffect(() => {
     const element = panelRef.current
     if (!element) return
@@ -122,9 +122,9 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
             <div className="px-3 py-3"><p className="text-[11px] font-medium text-slate-500">최종 기대 점수</p><div className="mt-1 flex flex-wrap items-baseline gap-1.5"><p className="text-lg font-semibold tabular-nums text-slate-950">{simulation.currentScore}점</p><span className={`text-xs font-semibold ${expectedGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</span></div></div>
           </div>
       </div> : null}
-      <div ref={splitLayoutRef} className={`${collapsedContent ? 'grid flex-1 bg-white' : 'bg-white'}`} style={collapsedContent ? { gridTemplateColumns: `minmax(0,1fr) ${simulationPanelMinimized ? COLLAPSED_PANEL_WIDTH + 28 : 0}px` } : undefined}>
-        <div ref={panelRef} style={collapsedContent && !simulationPanelMinimized ? { left: simulationPopupPosition.x, top: simulationPopupPosition.y, width: 'min(720px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)' } : undefined} className={`${collapsedContent ? 'col-start-2 row-start-1' : ''} ${simulationPanelMinimized ? 'bg-transparent' : collapsedContent ? 'fixed z-[60] space-y-5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl' : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-6'} px-0`}`}>
-          {simulationPanelMinimized ? (collapsedContent ? <div className="flex flex-col gap-2 border-l border-slate-200 bg-white p-2"><button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized(false) }} className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="승진 시뮬레이션 열기"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/></svg><span>승진 시뮬</span></button><button type="button" onClick={() => setCriteriaOpen(true)} className="ui-button ui-button-secondary ui-button-sm w-full px-1 text-[10px]">기준 보기</button></div> : <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized(false) }} title="승진 시뮬레이션 영역 복원" aria-label="승진 시뮬레이션 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">승진 시뮬레이션</span></button>) : <>
+      <div className={`${collapsedContent ? 'flex flex-1 bg-slate-50' : 'bg-white'}`}>
+        <div ref={panelRef} style={collapsedContent && !simulationPanelMinimized ? { left: simulationPopupPosition.x, top: simulationPopupPosition.y, width: 'min(720px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)' } : undefined} className={`${simulationPanelMinimized ? (collapsedContent ? 'hidden' : 'bg-transparent') : collapsedContent ? 'fixed z-[60] space-y-5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl' : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-6'} px-0`}`}>
+          {simulationPanelMinimized ? (collapsedContent ? null : <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized(false) }} title="승진 시뮬레이션 영역 복원" aria-label="승진 시뮬레이션 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">승진 시뮬레이션</span></button>) : <>
           <div onPointerDown={startSimulationPopupDrag} className={`flex min-h-9 flex-wrap items-center gap-2 border-b border-slate-200 pb-3 ${collapsedContent ? 'cursor-move select-none' : ''}`}>
             <h3 className="ui-section-title">승진 시뮬레이션</h3>
             <label><span className="sr-only">승진심사 시기</span><input type="month" value={profile.promotionReviewDate} onChange={(event) => updateProfile({ promotionReviewDate: event.target.value })} className="ui-field ui-field-sm w-36 bg-white" /></label>
@@ -135,9 +135,10 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
             <div className={`rounded-lg bg-gray-50 px-4 py-3 ${narrowPanel ? 'grid grid-cols-2 gap-x-10 gap-y-2' : 'flex flex-wrap items-center gap-5'}`}><div className={`flex shrink-0 items-center gap-5 ${narrowPanel ? 'col-span-2' : ''}`}><h4 className="ui-section-title">보조지표</h4><strong className="text-sm">합계 {simulation.auxiliaryScore}점</strong></div>{([['position', '직책'], ['rewardPenalty', '상벌'], ['tenure', '체류'], ['education', '교육']] as const).map(([key, label]) => <label key={key} className="flex min-w-0 items-center gap-2"><span className="shrink-0 text-xs font-medium text-gray-600">{label}</span><input type="number" value={profile.auxiliaryMetrics?.[key] ?? 0} onChange={(event) => updateAuxiliary(key, event.target.value)} className="ui-field ui-field-sm w-16 bg-white text-right" /></label>)}</div>
           </>}
         </div>
-        {collapsedContent && <div ref={performancePanelRef} className="col-start-1 row-start-1 min-w-0 overflow-hidden bg-white px-5"><div className="mb-3 flex items-center justify-between"><h3 className="ui-section-title">성과</h3></div>{collapsedContent}</div>}
+        {collapsedContent && <div ref={performancePanelRef} className={`min-w-0 flex-1 overflow-hidden bg-slate-50 ${performancePanelMinimized ? 'px-1 py-3' : `px-5 ${removeTopSpacing ? 'pt-0' : 'pt-6'}`}`}>{performancePanelMinimized ? <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setPerformancePanelMinimized(false) }} title="성과 영역 복원" aria-label="성과 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="whitespace-nowrap text-xs font-semibold">성과</span></button> : <><div className="mb-3 flex items-center justify-between"><h3 className="ui-section-title">성과</h3><button type="button" onClick={() => setPerformancePanelMinimized(true)} title="성과 영역 최소화" aria-label="성과 영역 최소화" className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0"><PanelToggleIcon collapsed={false} edge={simulationOnRight ? 'left' : 'right'} /></button></div>{collapsedContent}</>}</div>}
       </div>
       </section>
+    {collapsedContent && simulationTriggerContainerId && typeof document !== 'undefined' && document.getElementById(simulationTriggerContainerId) ? createPortal(<div className="flex items-center gap-2"><button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized((value) => !value) }} className="ui-button ui-button-secondary ui-button-sm whitespace-nowrap">{simulationPanelMinimized ? '시뮬레이션 보기' : '시뮬레이션 닫기'}</button><button type="button" onClick={() => setCriteriaOpen(true)} className="ui-button ui-button-ghost ui-button-sm whitespace-nowrap">기준 보기</button></div>, document.getElementById(simulationTriggerContainerId)!) : null}
     {criteriaOpen && <PromotionCriteriaDialog level={member.level} onClose={() => setCriteriaOpen(false)} />}
     </>
   )
