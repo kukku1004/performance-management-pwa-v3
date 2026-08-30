@@ -290,8 +290,8 @@ export default function PeerReviewSection() {
   const hasFilters = Boolean(filterTaskId || filterReviewerId || filterMemberId)
 
   return (
-    <section className="mb-4 space-y-5 py-1">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="mb-4 space-y-4 py-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
         <div className="flex items-center gap-3">
           <h3 className="ui-section-title">피어리뷰</h3>
           <Badge tone={status === '수집 완료' ? 'success' : 'neutral'}>{status}</Badge>
@@ -300,6 +300,7 @@ export default function PeerReviewSection() {
         <div className="flex gap-2">
           <button type="button" disabled={!ready} onClick={openTemplateDialog} className="ui-button ui-button-primary">팀원별 양식 만들기</button>
           <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">결과 업로드</button>
+          <button type="button" aria-haspopup="dialog" onClick={() => setEditorOpen(true)} className="ui-button ui-button-ghost">값 조정</button>
           <input ref={inputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { void upload(event.target.files); event.target.value = '' }} />
         </div>
       </div>
@@ -322,15 +323,10 @@ export default function PeerReviewSection() {
           <p className="mt-1 text-sm text-gray-500">팀원별 양식을 배포한 뒤 결과 파일을 업로드하면 분석 결과가 표시됩니다.</p>
         </div>
       ) : <>
-        <section aria-labelledby="peer-dashboard-title" className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3"><div><h4 id="peer-dashboard-title" className="text-base font-semibold text-gray-950">피어리뷰 인사이트</h4><p className="mt-1 text-sm text-gray-500">팀원 또는 과제를 기준으로 서로 주고받은 평가와 근거를 확인합니다.</p></div><button type="button" aria-haspopup="dialog" onClick={() => setEditorOpen(true)} className="ui-button ui-button-secondary">업로드 값 조정</button></div>
-
-          <div className="flex w-fit rounded-lg border border-gray-200 bg-gray-50 p-1" role="tablist" aria-label="피어리뷰 분석 기준"><button type="button" role="tab" aria-selected={dashboardView === 'member'} onClick={() => { setDashboardView('member'); setFilterMemberId(''); setFilterTaskId('') }} className={`ui-button ui-button-sm ${dashboardView === 'member' ? 'bg-white text-gray-950 shadow-sm' : 'ui-button-ghost text-gray-500'}`}>팀원별 보기</button><button type="button" role="tab" aria-selected={dashboardView === 'task'} onClick={() => { setDashboardView('task'); setFilterMemberId(''); setFilterTaskId('') }} className={`ui-button ui-button-sm ${dashboardView === 'task' ? 'bg-white text-gray-950 shadow-sm' : 'ui-button-ghost text-gray-500'}`}>과제별 보기</button></div>
-
-          <div className="flex flex-wrap items-end justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
-            <div className="min-w-0 flex-1"><span className="text-xs font-medium text-gray-500">{dashboardView === 'member' ? '팀원' : '과제'}</span><div className="mt-2 flex gap-2 overflow-x-auto pb-1">{dashboardView === 'member' ? dashboardMemberOptions.map((member) => <button key={member.id} type="button" onClick={() => { setFilterMemberId(member.id); setFilterTaskId('') }} className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${activeDashboardMemberId === member.id ? 'border-accent bg-orange-50 text-accent' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'}`}>{member.name}</button>) : taskViewTaskOptions.map((task) => <button key={task.id} type="button" onClick={() => { setFilterTaskId(task.id); setFilterMemberId('') }} className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${activeTaskViewTaskId === task.id ? 'border-accent bg-orange-50 text-accent' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'}`}>{task.name}</button>)}</div></div>
-            <label className="w-44 shrink-0 text-xs font-medium text-gray-500">리뷰어<select value={filterReviewerId} onChange={(event) => { setFilterReviewerId(event.target.value); setFilterTaskId('') }} className="ui-field mt-1"><option value="">전체 리뷰어</option>{state.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-            <button type="button" disabled={!hasFilters} onClick={resetFilters} className="ui-button ui-button-ghost">초기화</button>
+        <section aria-label="피어리뷰 결과" className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200">
+            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto px-1" role="tablist" aria-label={dashboardView === 'member' ? '팀원 선택' : '과제 선택'}>{dashboardView === 'member' ? dashboardMemberOptions.map((member) => <button key={member.id} type="button" role="tab" aria-selected={activeDashboardMemberId === member.id} onClick={() => { setFilterMemberId(member.id); setFilterTaskId('') }} className={`shrink-0 rounded-t-lg border-x border-t px-5 py-3 text-sm font-semibold ${activeDashboardMemberId === member.id ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white'}`}>{member.name}</button>) : taskViewTaskOptions.map((task) => <button key={task.id} type="button" role="tab" aria-selected={activeTaskViewTaskId === task.id} onClick={() => { setFilterTaskId(task.id); setFilterMemberId('') }} className={`max-w-56 shrink-0 truncate rounded-t-lg border-x border-t px-5 py-3 text-sm font-semibold ${activeTaskViewTaskId === task.id ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white'}`}>{task.name}</button>)}</div>
+            <div className="mb-2 flex shrink-0 items-center gap-2"><div className="flex rounded-md border border-gray-200 bg-white p-0.5" role="tablist" aria-label="피어리뷰 분석 기준"><button type="button" role="tab" aria-selected={dashboardView === 'member'} onClick={() => { setDashboardView('member'); setFilterMemberId(''); setFilterTaskId('') }} className={`ui-button ui-button-sm ${dashboardView === 'member' ? 'bg-gray-950 text-white' : 'ui-button-ghost text-gray-500'}`}>팀원별 보기</button><button type="button" role="tab" aria-selected={dashboardView === 'task'} onClick={() => { setDashboardView('task'); setFilterMemberId(''); setFilterTaskId('') }} className={`ui-button ui-button-sm ${dashboardView === 'task' ? 'bg-gray-950 text-white' : 'ui-button-ghost text-gray-500'}`}>과제별 보기</button></div><select aria-label="리뷰어 필터" value={filterReviewerId} onChange={(event) => { setFilterReviewerId(event.target.value); setFilterTaskId('') }} className="ui-field ui-field-sm w-36"><option value="">전체 리뷰어</option>{state.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>{hasFilters && <button type="button" onClick={resetFilters} className="ui-button ui-button-ghost ui-button-sm">초기화</button>}</div>
           </div>
 
           <section aria-label="피어리뷰 핵심 인사이트" className="grid border-y border-gray-200 sm:grid-cols-2 xl:grid-cols-4">
