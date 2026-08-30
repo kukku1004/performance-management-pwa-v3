@@ -24,11 +24,12 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
   const manualExpandUntilRef = useRef(0)
   const [simulationPercent, setSimulationPercent] = useState(48)
   const [narrowPanel, setNarrowPanel] = useState(false)
+  const [simulationPopupPosition, setSimulationPopupPosition] = useState(() => ({ x: Math.max(24, window.innerWidth - 760), y: 72 }))
   const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === member.id)
   const [profile, setProfile] = useState(storedProfile ?? getDefaultGrowthProfile(member.id))
 
   useEffect(() => setProfile(storedProfile ?? getDefaultGrowthProfile(member.id)), [member.id, storedProfile])
-  useEffect(() => onPanelMinimizedChange?.(simulationPanelMinimized && performancePanelMinimized), [onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
+  useEffect(() => onPanelMinimizedChange?.(collapsedContent ? performancePanelMinimized : simulationPanelMinimized && performancePanelMinimized), [collapsedContent, onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
   useEffect(() => {
     const element = panelRef.current
     if (!element) return
@@ -121,6 +122,25 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
     window.addEventListener('pointerup', handleUp)
   }
 
+  function startSimulationPopupDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!collapsedContent || (event.target as HTMLElement).closest('button,input,select')) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startY = event.clientY
+    const start = simulationPopupPosition
+    function move(moveEvent: PointerEvent) {
+      const width = Math.min(720, window.innerWidth - 32)
+      const height = Math.min(720, window.innerHeight - 32)
+      setSimulationPopupPosition({
+        x: Math.max(16, Math.min(window.innerWidth - width - 16, start.x + moveEvent.clientX - startX)),
+        y: Math.max(16, Math.min(window.innerHeight - height - 16, start.y + moveEvent.clientY - startY)),
+      })
+    }
+    function up() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   return (
     <>
     <section className="flex min-h-full flex-col">
@@ -136,9 +156,9 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
           </div>
       </div> : null}
       <div ref={splitLayoutRef} className={`${collapsedContent ? 'grid flex-1 bg-slate-50' : 'bg-white'}`} style={collapsedContent ? { gridTemplateColumns: simulationOnRight ? (simulationPanelMinimized ? `minmax(0,1fr) ${PANEL_SPLITTER_WIDTH}px ${COLLAPSED_PANEL_WIDTH}px` : performancePanelMinimized ? `${COLLAPSED_PANEL_WIDTH}px ${PANEL_SPLITTER_WIDTH}px minmax(0,1fr)` : `minmax(0, ${100 - simulationPercent}fr) ${PANEL_SPLITTER_WIDTH}px minmax(0, ${simulationPercent}fr)`) : (simulationPanelMinimized ? `${COLLAPSED_PANEL_WIDTH}px ${PANEL_SPLITTER_WIDTH}px minmax(0,1fr)` : performancePanelMinimized ? `minmax(0,1fr) ${PANEL_SPLITTER_WIDTH}px ${COLLAPSED_PANEL_WIDTH}px` : `minmax(0, ${simulationPercent}fr) ${PANEL_SPLITTER_WIDTH}px minmax(0, ${100 - simulationPercent}fr)`) } : undefined}>
-        <div ref={panelRef} className={`${collapsedContent ? `${simulationOnRight ? 'col-start-3' : 'col-start-1'} row-start-1` : ''} ${simulationPanelMinimized ? 'bg-white px-1 py-3' : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-6'} ${collapsedContent ? 'px-5' : 'px-0'}`}`}>
-          {simulationPanelMinimized ? <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized(false) }} title="승진 시뮬레이션 영역 복원" aria-label="승진 시뮬레이션 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">승진 시뮬레이션</span></button> : <>
-          <div className="flex min-h-9 flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+        <div ref={panelRef} style={collapsedContent && !simulationPanelMinimized ? { left: simulationPopupPosition.x, top: simulationPopupPosition.y, width: 'min(720px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)' } : undefined} className={`${collapsedContent ? `${simulationOnRight ? 'col-start-3' : 'col-start-1'} row-start-1` : ''} ${simulationPanelMinimized ? 'bg-transparent' : collapsedContent ? 'fixed z-[60] space-y-5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl' : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-6'} px-0`}`}>
+          {simulationPanelMinimized ? (collapsedContent ? <div className="fixed bottom-5 right-5 z-40 flex items-center gap-2"><button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized(false) }} className="ui-button ui-button-primary shadow-lg">시뮬레이션 열기</button><button type="button" onClick={() => setCriteriaOpen(true)} className="ui-button ui-button-secondary bg-white shadow-lg">기준 보기</button></div> : <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized(false) }} title="승진 시뮬레이션 영역 복원" aria-label="승진 시뮬레이션 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">승진 시뮬레이션</span></button>) : <>
+          <div onPointerDown={startSimulationPopupDrag} className={`flex min-h-9 flex-wrap items-center gap-2 border-b border-slate-200 pb-3 ${collapsedContent ? 'cursor-move select-none' : ''}`}>
             <h3 className="ui-section-title">승진 시뮬레이션</h3>
             <label><span className="sr-only">승진심사 시기</span><input type="month" value={profile.promotionReviewDate} onChange={(event) => updateProfile({ promotionReviewDate: event.target.value })} className="ui-field ui-field-sm w-36 bg-white" /></label>
             <span className="ml-auto flex items-center gap-1"><button type="button" onClick={() => setCriteriaOpen(true)} className="ui-button ui-button-ghost ui-button-sm">기준 보기</button><button type="button" onClick={() => setSimulationPanelMinimized(true)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="승진 시뮬레이션 영역 최소화" aria-label="승진 시뮬레이션 영역 최소화"><PanelToggleIcon collapsed={false} edge={simulationOnRight ? 'right' : 'left'} /></button></span>
