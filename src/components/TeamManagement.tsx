@@ -99,28 +99,16 @@ export default function TeamManagement() {
   return (
     <CriteriaWorkspaceLayout>
     <div className="ui-page">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5"><h3 className="text-lg font-semibold text-black">팀원 관리</h3><TitleHelp label="팀원을 추가하거나 제외하면 평가 매트릭스에 자동 반영되며, 다른 평가기간의 이력은 유지됩니다." /></div>
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200">
+        <div className="flex" role="tablist" aria-label="팀원 관리 구분">
+          <div className={`flex items-center gap-1.5 border-b-2 px-2 pb-3 pt-1 ${activeView === 'members' ? 'border-gray-950' : 'border-transparent'}`}>
+            <button type="button" role="tab" aria-selected={activeView === 'members'} onClick={() => setActiveView('members')} className={`transition-colors ${activeView === 'members' ? 'text-lg font-semibold text-gray-950' : 'text-sm font-medium text-gray-500 hover:text-gray-800'}`}>팀원</button>
+            {activeView === 'members' && <TitleHelp label="팀원을 추가하거나 제외하면 평가 매트릭스에 자동 반영되며, 다른 평가기간의 이력은 유지됩니다." />}
+          </div>
+          <button type="button" role="tab" aria-selected={activeView === 'peer'} onClick={() => setActiveView('peer')} className={`border-b-2 px-5 pb-3 pt-1 transition-colors ${activeView === 'peer' ? 'border-gray-950 text-lg font-semibold text-gray-950' : 'border-transparent text-sm font-medium text-gray-500 hover:text-gray-800'}`}>피어리뷰</button>
+        </div>
         {activeView === 'members' && <div className="flex flex-wrap items-center gap-2"><button onClick={downloadMemberTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button><button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button><input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>}
       </div>
-
-      <div className="flex border-b border-gray-200" role="tablist" aria-label="팀원 관리 구분">
-        <button type="button" role="tab" aria-selected={activeView === 'members'} onClick={() => setActiveView('members')} className={`border-b-2 px-5 py-2.5 text-sm font-semibold transition-colors ${activeView === 'members' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>팀원</button>
-        <button type="button" role="tab" aria-selected={activeView === 'peer'} onClick={() => setActiveView('peer')} className={`border-b-2 px-5 py-2.5 text-sm font-semibold transition-colors ${activeView === 'peer' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>피어리뷰</button>
-      </div>
-
-      {activeView === 'members' && <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4" aria-label="팀원 추가">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_2fr_2fr_auto]">
-          <label className="text-sm font-medium text-black">이름 <span className="text-danger">*</span><input value={newForm.name} onChange={(event) => setNewForm((form) => ({ ...form, name: event.target.value }))} placeholder="예: 홍길동" className={`ui-field mt-1 ${newFormError ? 'border-danger' : ''}`} /></label>
-          <label className="text-sm font-medium text-black">직책<select value={newForm.position} onChange={(event) => setNewForm((form) => ({ ...form, position: event.target.value as Position | '' }))} className="ui-field mt-1"><option value="">-</option>{POSITION_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label className="text-sm font-medium text-black">직급<select value={newForm.level} onChange={(event) => setNewForm((form) => ({ ...form, level: event.target.value as Level | '' }))} className="ui-field mt-1"><option value="">-</option>{LEVEL_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label className="text-sm font-medium text-black">연차<input type="number" min="0" value={newForm.yearsOfService} onChange={(event) => setNewForm((form) => ({ ...form, yearsOfService: event.target.value }))} placeholder="예: 3" className="ui-field mt-1" /></label>
-          <label className="text-sm font-medium text-black">역할<input value={newForm.role} onChange={(event) => setNewForm((form) => ({ ...form, role: event.target.value }))} placeholder="예: 리드, 기획, 디자인" className="ui-field mt-1" /></label>
-          <label className="text-sm font-medium text-black">코멘트<input value={newForm.comment} onChange={(event) => setNewForm((form) => ({ ...form, comment: event.target.value }))} placeholder="선택 입력" className="ui-field mt-1" /></label>
-          <button type="button" onClick={addMember} className="ui-button ui-button-primary self-end whitespace-nowrap">+ 팀원 추가</button>
-        </div>
-        {newFormError && <p className="mt-2 text-xs text-danger">{newFormError}</p>}
-      </section>}
 
       {activeView === 'peer' ? <PeerReviewSection /> : <>
 
@@ -147,7 +135,7 @@ export default function TeamManagement() {
         <p className="ui-empty">
           등록된 팀원이 없습니다.
           <br />
-          위 입력 영역에서 직접 등록하거나,
+          아래 입력 영역에서 직접 등록하거나,
           <br />
           위의 '엑셀로 업로드' 버튼으로 여러 팀원을 한 번에 등록할 수 있습니다.
         </p>
@@ -221,6 +209,19 @@ export default function TeamManagement() {
         </table>
       </div>
       )}
+
+      <section className="rounded-lg border border-gray-200 bg-white p-4" aria-label="팀원 추가">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_2fr_2fr_auto]">
+          <label className="text-sm font-medium text-black">이름 <span className="text-danger">*</span><input value={newForm.name} onChange={(event) => setNewForm((form) => ({ ...form, name: event.target.value }))} placeholder="예: 홍길동" className={`ui-field mt-1 ${newFormError ? 'border-danger' : ''}`} /></label>
+          <label className="text-sm font-medium text-black">직책<select value={newForm.position} onChange={(event) => setNewForm((form) => ({ ...form, position: event.target.value as Position | '' }))} className="ui-field mt-1"><option value="">-</option>{POSITION_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label className="text-sm font-medium text-black">직급<select value={newForm.level} onChange={(event) => setNewForm((form) => ({ ...form, level: event.target.value as Level | '' }))} className="ui-field mt-1"><option value="">-</option>{LEVEL_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label className="text-sm font-medium text-black">연차<input type="number" min="0" value={newForm.yearsOfService} onChange={(event) => setNewForm((form) => ({ ...form, yearsOfService: event.target.value }))} placeholder="예: 3" className="ui-field mt-1" /></label>
+          <label className="text-sm font-medium text-black">역할<input value={newForm.role} onChange={(event) => setNewForm((form) => ({ ...form, role: event.target.value }))} placeholder="예: 리드, 기획, 디자인" className="ui-field mt-1" /></label>
+          <label className="text-sm font-medium text-black">코멘트<input value={newForm.comment} onChange={(event) => setNewForm((form) => ({ ...form, comment: event.target.value }))} placeholder="선택 입력" className="ui-field mt-1" /></label>
+          <button type="button" onClick={addMember} className="ui-button ui-button-primary self-end whitespace-nowrap">+ 팀원 추가</button>
+        </div>
+        {newFormError && <p className="mt-2 text-xs text-danger">{newFormError}</p>}
+      </section>
 
       <ConfirmDialog
         open={deletingMember !== null}

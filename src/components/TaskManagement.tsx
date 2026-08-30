@@ -88,22 +88,9 @@ export default function TaskManagement() {
     <CriteriaWorkspaceLayout>
     <div className="ui-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5"><h3 className="text-lg font-semibold text-black">과제 관리</h3><TitleHelp label="과제를 추가하거나 삭제하면 평가 매트릭스와 리포트에 즉시 반영됩니다." /></div>
+        <div className="flex items-center gap-1.5"><h3 className="text-lg font-semibold text-black">과제</h3><TitleHelp label="과제를 추가하거나 삭제하면 평가 매트릭스와 리포트에 즉시 반영됩니다." /></div>
         <div className="flex flex-wrap items-center gap-2"><button onClick={downloadTaskTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button><button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button><input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>
       </div>
-      <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4" aria-label="과제 추가">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_2fr_2fr_auto]">
-          <label className="text-sm font-medium text-black">과제명 <span className="text-danger">*</span><input value={newForm.name} onChange={(event) => setNewForm((form) => ({ ...form, name: event.target.value }))} placeholder="예: 신규 랜딩페이지 제작" className={`ui-field mt-1 ${newFormError && !newForm.name.trim() ? 'border-danger' : ''}`} /></label>
-          <label className="text-sm font-medium text-black">과제등급<select value={newForm.importance} disabled={state.criteria.taskGradeWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, importance: event.target.value as Importance }))} className="ui-field mt-1 disabled:bg-gray-100">{IMPORTANCE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label className="text-sm font-medium text-black">업무량<select value={newForm.workload} disabled={state.criteria.workloadWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, workload: event.target.value as Workload }))} className="ui-field mt-1 disabled:bg-gray-100">{WORKLOAD_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label className="text-sm font-medium text-black">성과등급<select value={newForm.performanceGrade} disabled={state.criteria.performanceGradeWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, performanceGrade: event.target.value as PerformanceGrade }))} className="ui-field mt-1 disabled:bg-gray-100">{PERFORMANCE_GRADE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label className="text-sm font-medium text-black">목표 <span className="text-danger">*</span><input value={newForm.objective} onChange={(event) => setNewForm((form) => ({ ...form, objective: event.target.value }))} placeholder="예: 전환율 15% 개선" className="ui-field mt-1" /></label>
-          <label className="text-sm font-medium text-black">성과<input value={newForm.achievement} onChange={(event) => setNewForm((form) => ({ ...form, achievement: event.target.value }))} placeholder="예: 전환율 18% 달성 (선택)" className="ui-field mt-1" /></label>
-          <button type="button" onClick={addTask} className="ui-button ui-button-primary self-end whitespace-nowrap">+ 과제 추가</button>
-        </div>
-        {newFormError && <p className="mt-2 text-xs text-danger">{newFormError}</p>}
-      </section>
-
       {uploadOpen && <FileDropZone
         title="과제 Excel 파일을 여기에 드래그"
         description="과제명·과제등급·업무량·목표·성과·성과등급을 현재 평가에 반영합니다."
@@ -127,7 +114,7 @@ export default function TaskManagement() {
         <p className="ui-empty">
           등록된 과제가 없습니다.
           <br />
-          위 입력 영역에서 직접 등록하거나,
+          아래 입력 영역에서 직접 등록하거나,
           <br />
           위의 '엑셀로 업로드' 버튼으로 여러 과제를 한 번에 등록할 수 있습니다.
         </p>
@@ -193,6 +180,19 @@ export default function TaskManagement() {
         </table>
       </div>
       )}
+
+      <section className="rounded-lg border border-gray-200 bg-white p-4" aria-label="과제 추가">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_2fr_2fr_auto]">
+          <label className="text-sm font-medium text-black">과제명 <span className="text-danger">*</span><input value={newForm.name} onChange={(event) => setNewForm((form) => ({ ...form, name: event.target.value }))} placeholder="예: 신규 랜딩페이지 제작" className={`ui-field mt-1 ${newFormError && !newForm.name.trim() ? 'border-danger' : ''}`} /></label>
+          <label className="text-sm font-medium text-black">과제등급<select value={newForm.importance} disabled={state.criteria.taskGradeWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, importance: event.target.value as Importance }))} className="ui-field mt-1 disabled:bg-gray-100">{IMPORTANCE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label className="text-sm font-medium text-black">업무량<select value={newForm.workload} disabled={state.criteria.workloadWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, workload: event.target.value as Workload }))} className="ui-field mt-1 disabled:bg-gray-100">{WORKLOAD_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label className="text-sm font-medium text-black">성과등급<select value={newForm.performanceGrade} disabled={state.criteria.performanceGradeWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, performanceGrade: event.target.value as PerformanceGrade }))} className="ui-field mt-1 disabled:bg-gray-100">{PERFORMANCE_GRADE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label className="text-sm font-medium text-black">목표 <span className="text-danger">*</span><input value={newForm.objective} onChange={(event) => setNewForm((form) => ({ ...form, objective: event.target.value }))} placeholder="예: 전환율 15% 개선" className="ui-field mt-1" /></label>
+          <label className="text-sm font-medium text-black">성과<input value={newForm.achievement} onChange={(event) => setNewForm((form) => ({ ...form, achievement: event.target.value }))} placeholder="예: 전환율 18% 달성 (선택)" className="ui-field mt-1" /></label>
+          <button type="button" onClick={addTask} className="ui-button ui-button-primary self-end whitespace-nowrap">+ 과제 추가</button>
+        </div>
+        {newFormError && <p className="mt-2 text-xs text-danger">{newFormError}</p>}
+      </section>
 
       <ConfirmDialog
         open={deletingTask !== null}
