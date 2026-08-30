@@ -102,7 +102,6 @@ export default function TeamManagement() {
         <h3 className="text-lg font-semibold text-black">팀원 관리</h3>
         {activeView === 'members' && <div className="flex flex-wrap items-center gap-2"><button onClick={downloadMemberTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button><button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button><input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>}
       </div>
-      <p className="mt-1 text-sm text-gray-600">팀원을 추가/삭제하면 평가 매트릭스의 열이 자동으로 반영됩니다. 제외한 팀원의 다른 평가기간 이력과 TeamMember ID는 유지됩니다.</p>
 
       <div className="flex border-b border-gray-200" role="tablist" aria-label="팀원 관리 구분">
         <button type="button" role="tab" aria-selected={activeView === 'members'} onClick={() => setActiveView('members')} className={`border-b-2 px-5 py-2.5 text-sm font-semibold transition-colors ${activeView === 'members' ? 'border-gray-950 text-gray-950' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>팀원</button>

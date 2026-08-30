@@ -296,7 +296,7 @@ export default function PeerReviewSection() {
         </div>
       ) : <>
         <section aria-labelledby="peer-dashboard-title" className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3"><div><h4 id="peer-dashboard-title" className="text-base font-semibold text-gray-950">팀원별 피어리뷰 인사이트</h4><p className="mt-1 text-sm text-gray-500">팀원이 과제마다 받은 종합 평가와 리뷰어별 근거를 함께 확인합니다.</p></div><button type="button" aria-expanded={editorOpen} onClick={() => setEditorOpen((open) => !open)} className="ui-button ui-button-secondary">{editorOpen ? '값 조정 닫기' : '업로드 값 조정'}</button></div>
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><h4 id="peer-dashboard-title" className="text-base font-semibold text-gray-950">팀원별 피어리뷰 인사이트</h4><p className="mt-1 text-sm text-gray-500">팀원이 과제마다 받은 종합 평가와 리뷰어별 근거를 함께 확인합니다.</p></div><button type="button" aria-haspopup="dialog" onClick={() => setEditorOpen(true)} className="ui-button ui-button-secondary">업로드 값 조정</button></div>
 
           <div className="flex flex-wrap items-end justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
             <div className="min-w-0 flex-1"><span className="text-xs font-medium text-gray-500">팀원</span><div className="mt-2 flex gap-2 overflow-x-auto pb-1">{dashboardMemberOptions.map((member) => <button key={member.id} type="button" onClick={() => { setFilterMemberId(member.id); setFilterTaskId('') }} className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${activeDashboardMemberId === member.id ? 'border-accent bg-orange-50 text-accent' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'}`}>{member.name}</button>)}</div></div>
@@ -324,9 +324,10 @@ export default function PeerReviewSection() {
 
         <details className="rounded-lg border border-gray-200 bg-white"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">원본 데이터 보기 · {filteredReviews.length}건</summary><div className="max-h-[420px] overflow-auto border-t border-gray-200 p-3"><div className="ui-table-wrap"><table className="ui-table min-w-[760px]"><thead><tr><th>과제</th><th>리뷰어</th><th>팀원</th><th className="text-right">기여도</th><th className="text-center">등급</th><th>근거</th></tr></thead><tbody>{filteredReviews.map((review) => <tr key={review.id}><td>{state.tasks.find((task) => task.id === review.taskId)?.name ?? '-'}</td><td>{review.reviewerName}</td><td>{state.members.find((member) => member.id === review.targetMemberId)?.name ?? '-'}</td><td className="text-right tabular-nums">{review.contributionPercent === null ? '-' : `${review.contributionPercent}%`}</td><td className="text-center font-semibold">{review.grade ?? '-'}</td><td className="max-w-[360px] whitespace-normal">{review.evidence || '-'}</td></tr>)}</tbody></table></div></div></details>
 
-        {editorOpen && <section className="rounded-lg border border-gray-200 bg-white p-4">
-          <div><h4 className="text-sm font-semibold text-gray-950">업로드 값 조정</h4><p className="mt-1 text-xs text-gray-500">과제와 리뷰어를 선택한 뒤 필요한 값만 수정합니다.</p></div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {editorOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"><div role="dialog" aria-modal="true" aria-labelledby="peer-editor-title" className="flex max-h-[min(760px,calc(100vh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4"><div><h2 id="peer-editor-title" className="text-lg font-semibold text-gray-950">업로드 값 조정</h2><p className="mt-1 text-sm text-gray-500">과제와 리뷰어를 선택한 뒤 필요한 값만 수정합니다.</p></div><ModalCloseButton onClick={() => setEditorOpen(false)} label="업로드 값 조정 닫기" /></div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-medium text-gray-700">과제<select value={receivedTaskId} onChange={(event) => { setSelectedTaskId(event.target.value); setSelectedReviewerId(''); setReviewSaveMessage('') }} className="ui-field mt-2">{state.tasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></label>
             <label className="text-sm font-medium text-gray-700">리뷰어<select value={receivedReviewerId} onChange={(event) => { setSelectedReviewerId(event.target.value); setReviewSaveMessage('') }} className="ui-field mt-2">{taskParticipants.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
           </div>
@@ -334,8 +335,9 @@ export default function PeerReviewSection() {
             const draft = reviewDrafts[member.id] ?? { contribution: '', grade: '', evidence: '' }
             return <div key={member.id} className="grid items-center gap-3 p-3 lg:grid-cols-[100px_100px_90px_minmax(180px,1fr)]"><strong className="text-sm text-gray-950">{member.name}{member.id === receivedReviewerId && <span className="ml-1 text-xs font-normal text-gray-400">(본인)</span>}</strong><input aria-label={`${member.name} 기여도`} type="number" min="0" max="100" value={draft.contribution} onChange={(event) => updateDraft(member.id, { contribution: event.target.value })} placeholder="기여도 %" className="ui-field" /><select aria-label={`${member.name} 수행등급`} value={draft.grade} onChange={(event) => updateDraft(member.id, { grade: event.target.value })} className="ui-field"><option value="">-</option>{GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select><input aria-label={`${member.name} 근거`} value={draft.evidence} onChange={(event) => updateDraft(member.id, { evidence: event.target.value })} placeholder="근거(선택)" className="ui-field" /></div>
           })}</div>
-          <div className="mt-4 flex items-center gap-3"><button type="button" onClick={saveReceivedReviews} className="ui-button ui-button-primary">저장</button>{reviewSaveMessage && <p className={`text-sm ${reviewSaveMessage.includes('0~100') ? 'text-danger' : 'text-success'}`}>{reviewSaveMessage}</p>}</div>
-        </section>}
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-5 py-4"><div>{reviewSaveMessage && <p className={`text-sm ${reviewSaveMessage.includes('0~100') ? 'text-danger' : 'text-success'}`}>{reviewSaveMessage}</p>}</div><div className="flex items-center gap-2"><button type="button" onClick={() => setEditorOpen(false)} className="ui-button ui-button-secondary">취소</button><button type="button" onClick={saveReceivedReviews} className="ui-button ui-button-primary">저장</button></div></div>
+        </div></div>}
       </>}
 
       {generatedMembers.length > 0 && <p className="text-sm text-success">팀원별 양식 {generatedMembers.length}개가 생성되었습니다.</p>}
