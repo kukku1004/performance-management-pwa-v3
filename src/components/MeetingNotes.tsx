@@ -118,7 +118,7 @@ export default function MeetingNotes() {
 
   return <div className="ui-page">
     {members.length === 0 || !selectedMember ? <p className="ui-empty">등록된 팀원이 없습니다. 팀원 관리에서 먼저 팀원을 등록하세요.</p> : <div className="-mt-5 overflow-hidden bg-white">
-      {import.meta.env.DEV && <div className="flex justify-end border-b border-gray-100 pb-2"><button type="button" onClick={addSampleMeetingData} className="ui-button ui-button-secondary ui-button-sm">가상 면담 데이터 채우기</button></div>}
+      {import.meta.env.DEV && meetingNotes.length === 0 && <div className="flex justify-end border-b border-gray-100 pb-2"><button type="button" onClick={addSampleMeetingData} className="ui-button ui-button-secondary ui-button-sm">가상 면담 데이터 채우기</button></div>}
       <MeetingNotesFocusPreview
         members={members} selectedMember={selectedMember} selectedMemberId={selectedMemberId} onSelectMember={setSelectedMemberId}
         notes={notesForMember} allNotes={meetingNotes} insights={meetingInsights}
