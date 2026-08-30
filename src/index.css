@@ -186,6 +186,11 @@
 
 @media (max-height: 900px) {
   .promotion-criteria-embedded { zoom: .86; width: 116.3%; height: 116.3%; }
+  .simulation-popup-compact { zoom: .86; }
+}
+
+@media (max-height: 760px) {
+  .simulation-popup-compact { zoom: .74; }
 }
 
 .meeting-focus-timeline { min-width: 0; overflow: visible; padding: 0 8px 96px; }
