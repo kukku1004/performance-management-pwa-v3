@@ -10,6 +10,7 @@ import { useWorkspace } from '../state/WorkspaceContext'
 import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory } from '../utils/growth'
 import type { MemberInsight } from '../utils/memberInsights'
 import InsightEvidenceButton from './InsightEvidenceButton'
+import MeetingPrintPreview from './MeetingPrintPreview'
 
 interface MeetingNotesFocusPreviewProps {
   members: TeamMember[]
@@ -81,6 +82,7 @@ export default function MeetingNotesFocusPreview({
   const [noteInput, setNoteInput] = useState('')
   const [noteColorPicker, setNoteColorPicker] = useState<string | null>(null)
   const [growthOpen, setGrowthOpen] = useState(false)
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [referencePanelsMinimized, setReferencePanelsMinimized] = useState(true)
   const layoutRef = useRef<HTMLDivElement>(null)
   const [documentWidth, setDocumentWidth] = useState(760)
@@ -217,7 +219,7 @@ export default function MeetingNotesFocusPreview({
         <div className={`meeting-focus-content ${referencePanelsMinimized ? 'meeting-focus-content-expanded' : ''}`}>
         <div className="meeting-focus-compose">
         <section className="mt-6">
-          <div className="flex flex-wrap items-center gap-3"><input type="date" value={newDate} onChange={(event) => onDateChange(event.target.value)} className="ui-field w-auto" /><div className="flex items-center gap-1" aria-label="면담 분위기">{MOODS.map((mood) => { const selected = newMood === mood.value; return <button key={mood.value} type="button" title={mood.label} aria-label={mood.label} aria-pressed={selected} onClick={() => onMoodChange(selected ? '' : mood.value)} className={`flex h-8 w-8 items-center justify-center rounded-md border transition ${selected ? 'border-current' : 'border-transparent hover:bg-gray-50'}`} style={{ color: mood.color, backgroundColor: selected ? `${mood.color}14` : undefined }}><MoodGlyph value={mood.value} className="h-5 w-5" /></button> })}</div><span className="ml-auto">{loadedNote ? <span className="flex gap-2"><button type="button" onClick={() => onDelete(loadedNote)} className="ui-button ui-button-danger ui-button-sm">삭제</button><button type="button" onClick={() => onUpdateLoaded(loadedNote)} disabled={!newComment.trim()} className="ui-button ui-button-primary ui-button-sm">수정하기</button></span> : <button type="button" onClick={onAdd} disabled={!newComment.trim()} className="ui-button ui-button-primary ui-button-sm">작성하기</button>}</span></div>
+          <div className="flex flex-wrap items-center gap-3"><input type="date" value={newDate} onChange={(event) => onDateChange(event.target.value)} className="ui-field w-auto" /><div className="flex items-center gap-1" aria-label="면담 분위기">{MOODS.map((mood) => { const selected = newMood === mood.value; return <button key={mood.value} type="button" title={mood.label} aria-label={mood.label} aria-pressed={selected} onClick={() => onMoodChange(selected ? '' : mood.value)} className={`flex h-8 w-8 items-center justify-center rounded-md border transition ${selected ? 'border-current' : 'border-transparent hover:bg-gray-50'}`} style={{ color: mood.color, backgroundColor: selected ? `${mood.color}14` : undefined }}><MoodGlyph value={mood.value} className="h-5 w-5" /></button> })}</div><span className="ml-auto flex gap-2"><button type="button" onClick={() => setPrintPreviewOpen(true)} className="ui-button ui-button-secondary ui-button-sm">면담용지</button>{loadedNote ? <><button type="button" onClick={() => onDelete(loadedNote)} className="ui-button ui-button-danger ui-button-sm">삭제</button><button type="button" onClick={() => onUpdateLoaded(loadedNote)} disabled={!newComment.trim()} className="ui-button ui-button-primary ui-button-sm">수정하기</button></> : <button type="button" onClick={onAdd} disabled={!newComment.trim()} className="ui-button ui-button-primary ui-button-sm">작성하기</button>}</span></div>
           <textarea value={newComment} onChange={(event) => onCommentChange(event.target.value)} rows={7} placeholder="면담 내용을 입력하세요." className="ui-field mt-3 min-h-32 w-full resize-y" />
           <section className="mt-4 border-t border-gray-200 pt-3"><button type="button" onClick={() => setGrowthOpen((value) => !value)} className="flex w-full items-center gap-2 text-left"><DisclosureIcon open={growthOpen} className="h-4 w-4 text-gray-400"/><strong className="text-sm text-gray-800">육성 포인트</strong><span className="text-xs text-gray-400">강점 · 보완 필요 · 다음 경험 · Career Goal</span></button>{growthOpen && <div className="mt-3 grid gap-3"><label><span className="ui-label">강점</span><input value={growthPoints.strength} onChange={(event) => onGrowthPointsChange({ ...growthPoints, strength: event.target.value })} placeholder="강점 입력" className="ui-field" /></label><label><span className="ui-label">보완 필요</span><input value={growthPoints.improvement} onChange={(event) => onGrowthPointsChange({ ...growthPoints, improvement: event.target.value })} placeholder="보완이 필요한 영역 입력" className="ui-field" /></label><label><span className="ui-label">다음 도전 경험</span><input value={growthPoints.challenge} onChange={(event) => onGrowthPointsChange({ ...growthPoints, challenge: event.target.value })} placeholder="도전해 보고 싶은 경험 입력" className="ui-field" /></label><label><span className="ui-label">Career Goal</span><input value={growthPoints.careerGoal} onChange={(event) => onGrowthPointsChange({ ...growthPoints, careerGoal: event.target.value })} placeholder="성장 커리어/목표 입력" className="ui-field" /></label></div>}</section>
         </section>
@@ -241,5 +243,6 @@ export default function MeetingNotesFocusPreview({
       <PanelSplitter aria-label="면담일지와 성과·성장 영역 너비 조절" onPointerDown={startResize} />
       <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
+    {printPreviewOpen && <MeetingPrintPreview member={selectedMember} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
   </div>
 }
