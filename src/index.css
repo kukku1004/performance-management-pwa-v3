@@ -131,13 +131,15 @@
 
 .meeting-focus-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 392px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 20px;
   border-bottom: 1px solid #e2e8f0;
   background: #fff;
   padding-bottom: 12px;
 }
+
+.meeting-focus-score-actions { display: flex; align-items: center; gap: 10px; }
 
 .meeting-focus-profile { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 12px; padding: 0; }
 .meeting-focus-member-title { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
