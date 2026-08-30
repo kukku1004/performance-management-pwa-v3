@@ -53,6 +53,7 @@ export default function GoogleDriveDialog({
   onResetWorkspace,
   onClose,
   teamName,
+  periodLabel,
 }: GoogleDriveDialogProps) {
   const [connected, setConnected] = useState(isGoogleDriveConnected())
   const [driveEmail, setDriveEmail] = useState(getConnectedGoogleAccount()?.email ?? '')
@@ -251,11 +252,14 @@ export default function GoogleDriveDialog({
         )}
 
         {activeTab === 'local' ? (
-          <div className="mx-auto mt-5 w-full max-w-4xl space-y-4 px-1">
-            <section className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="min-w-0"><h4 className="ui-section-title">저장 위치</h4>{backupDirectory ? <p className="mt-1 truncate text-sm font-medium text-success" title={`브라우저 보안상 상위 폴더 경로는 표시되지 않습니다. 선택 폴더: ${backupDirectory.name}`}><span className="text-gray-400">내 컴퓨터 › … › </span>{backupDirectory.name}</p> : <p className="ui-section-description">지정하지 않으면 브라우저 기본 다운로드 폴더에 저장됩니다.</p>}</div><button type="button" onClick={() => { void chooseBackupDirectory() }} className="ui-button ui-button-secondary">위치 지정</button></section>
-            <section className="space-y-4 rounded-lg border border-gray-200 p-4"><div><h4 className="ui-section-title">지금 데이터 백업</h4><p className="ui-section-description">현재 계정에 저장된 모든 팀·프로젝트 데이터를 선택한 형식으로 함께 내보냅니다.</p></div><div><label htmlFor="local-period-name" className="ui-label">평가기간명</label><input id="local-period-name" value={periodName} onChange={(event) => onPeriodNameChange(event.target.value)} className="ui-field" /></div><fieldset><legend className="ui-label">백업 파일</legend><div className="mt-2 flex flex-wrap gap-x-6 gap-y-2"><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-900"><input type="checkbox" checked={localFormats.json} onChange={(event) => setLocalFormats((current) => ({ ...current, json: event.target.checked }))} className="h-4 w-4 accent-[#d4772c]" />JSON <span className="text-xs text-gray-500">복원용 원본</span></label><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-900"><input type="checkbox" checked={localFormats.excel} onChange={(event) => setLocalFormats((current) => ({ ...current, excel: event.target.checked }))} className="h-4 w-4 accent-[#d4772c]" />Excel <span className="text-xs text-gray-500">확인·보관용</span></label></div></fieldset><button type="button" onClick={() => { void saveSelectedLocalBackups() }} disabled={busy || (!localFormats.json && !localFormats.excel)} className="ui-button ui-button-primary">선택 항목 백업</button></section>
-            <section className="space-y-3 rounded-lg border border-gray-200 p-4"><div><h4 className="ui-section-title">백업 파일 복원</h4><p className="ui-section-description">이 앱에서 내려받은 JSON 백업으로 현재 프로젝트를 복원합니다.</p></div><input ref={restoreInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => { void handleLocalRestore(event.target.files?.[0]); event.target.value = '' }} /><button type="button" onClick={() => restoreInputRef.current?.click()} disabled={busy} className="ui-button ui-button-secondary">JSON 백업 선택</button></section>
-            <div className="rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-600">현재 데이터: 과제 {state.tasks.length}개 · 팀원 {state.members.length}명 · 피어리뷰 {state.peerReviews.length}건</div>
+          <div className="-mx-6 min-h-full bg-slate-50 px-6 py-6 lg:px-8">
+            <div className="mx-auto w-full max-w-4xl space-y-5">
+              <section className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-6 py-5"><div className="min-w-0"><h4 className="ui-section-title">저장 위치</h4>{backupDirectory ? <p className="mt-2 truncate text-sm font-medium text-success" title={`브라우저 보안상 상위 폴더 경로는 표시되지 않습니다. 선택 폴더: ${backupDirectory.name}`}><span className="font-normal text-gray-500">내 컴퓨터</span><span className="mx-1 text-gray-400">›</span><span className="text-gray-400">…</span><span className="mx-1 text-gray-400">›</span>{backupDirectory.name}</p> : <p className="mt-2 text-sm text-gray-500">내 컴퓨터 <span className="mx-1 text-gray-400">›</span> 기본 다운로드 폴더</p>}</div><button type="button" onClick={() => { void chooseBackupDirectory() }} className="ui-button ui-button-secondary">위치 지정</button></section>
+
+              <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6"><div><h4 className="ui-section-title">현재 프로젝트 백업</h4><p className="ui-section-description"><strong className="font-medium text-gray-700">{teamName ?? '현재 팀'} · {periodLabel}</strong> 프로젝트의 과제, 팀원, 평가 및 면담 데이터를 내보냅니다.</p></div><div className="rounded-lg bg-slate-100 px-4 py-3 text-[13px] font-medium text-gray-600">현재 데이터: 과제 {state.tasks.length}개 · 팀원 {state.members.length}명 · 피어리뷰 {state.peerReviews.length}건</div><div><label htmlFor="local-period-name" className="ui-label">백업 파일명</label><input id="local-period-name" value={periodName} onChange={(event) => onPeriodNameChange(event.target.value)} className="ui-field mt-2" /></div><div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3"><label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-900"><input type="checkbox" checked={localFormats.json} onChange={(event) => setLocalFormats((current) => ({ ...current, json: event.target.checked }))} className="h-[18px] w-[18px] accent-[#c05621]" />JSON 복원용 원본</label><label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-900"><input type="checkbox" checked={localFormats.excel} onChange={(event) => setLocalFormats((current) => ({ ...current, excel: event.target.checked }))} className="h-[18px] w-[18px] accent-[#c05621]" />Excel 확인·보관용</label><button type="button" onClick={() => { void saveSelectedLocalBackups() }} disabled={busy || (!localFormats.json && !localFormats.excel)} className="ui-button ui-button-primary px-5">{periodName.trim() || '현재 프로젝트'} 데이터 백업</button></div></section>
+
+              <section className="flex items-center justify-between gap-5 rounded-xl border border-gray-200 bg-white px-6 py-5"><div><h4 className="ui-section-title">백업 파일 복원</h4><p className="ui-section-description">이 앱에서 내려받은 JSON 백업으로 현재 프로젝트를 복원합니다.</p></div><input ref={restoreInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => { void handleLocalRestore(event.target.files?.[0]); event.target.value = '' }} /><button type="button" onClick={() => restoreInputRef.current?.click()} disabled={busy} className="ui-button ui-button-secondary shrink-0">JSON 백업 선택</button></section>
+            </div>
           </div>
         ) : activeTab === 'drive' ? <div className="mx-auto mt-5 w-full max-w-4xl px-1">
           <div className="mb-5 flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
@@ -298,7 +302,7 @@ export default function GoogleDriveDialog({
               {connected && (
                 <>
                   <button type="button" onClick={handleSave} disabled={busy} className="ui-button ui-button-primary">
-                    전체 데이터 저장
+                    현재 프로젝트 저장
                   </button>
                   <button
                     type="button"
