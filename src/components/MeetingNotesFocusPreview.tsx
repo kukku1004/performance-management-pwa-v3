@@ -85,7 +85,7 @@ export default function MeetingNotesFocusPreview({
   const [referencePanelsMinimized, setReferencePanelsMinimized] = useState(true)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const layoutRef = useRef<HTMLDivElement>(null)
-  const [documentWidth, setDocumentWidth] = useState(760)
+  const [referenceWidth, setReferenceWidth] = useState(() => Math.min(520, Math.max(360, window.innerWidth * 0.26)))
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
   const loadedNote = selectedNoteId ? notes.find((note) => note.id === selectedNoteId) ?? null : null
   const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId) ?? getDefaultGrowthProfile(selectedMemberId)
@@ -160,15 +160,15 @@ export default function MeetingNotesFocusPreview({
   function startResize(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
     const startX = event.clientX
-    const startDocument = documentWidth
+    const startReference = referenceWidth
     const available = layoutRef.current?.clientWidth ?? 1440
     function move(moveEvent: PointerEvent) {
-      const proposed = startDocument + moveEvent.clientX - startX
+      const proposed = startReference - (moveEvent.clientX - startX)
       const calendarWidth = calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH
       const fixedWidth = calendarWidth + 1 + 12 + HISTORY_RAIL_WIDTH + PANEL_SPLITTER_WIDTH
-      const maximum = Math.max(DOCUMENT_USABLE_MIN_WIDTH, available - fixedWidth - REFERENCE_USABLE_MIN_WIDTH)
-      setReferencePanelsMinimized(available - fixedWidth - proposed < REFERENCE_USABLE_MIN_WIDTH)
-      setDocumentWidth(Math.max(DOCUMENT_USABLE_MIN_WIDTH, Math.min(maximum, proposed)))
+      const maximum = Math.max(REFERENCE_USABLE_MIN_WIDTH, available - fixedWidth - DOCUMENT_USABLE_MIN_WIDTH)
+      setReferencePanelsMinimized(proposed < REFERENCE_USABLE_MIN_WIDTH)
+      setReferenceWidth(Math.max(REFERENCE_USABLE_MIN_WIDTH, Math.min(maximum, proposed)))
     }
     function up() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
     window.addEventListener('pointermove', move)
@@ -184,7 +184,7 @@ export default function MeetingNotesFocusPreview({
     </div>
 
     <div ref={layoutRef} className={`meeting-focus-workspace ${referencePanelsMinimized ? 'meeting-focus-workspace-expanded' : ''}`} style={{ gridTemplateColumns: !referencePanelsMinimized
-      ? `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(${DOCUMENT_USABLE_MIN_WIDTH}px, ${documentWidth}px) ${PANEL_SPLITTER_WIDTH}px minmax(${REFERENCE_USABLE_MIN_WIDTH}px, 1fr)`
+      ? `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(${DOCUMENT_USABLE_MIN_WIDTH}px, 1fr) ${PANEL_SPLITTER_WIDTH}px ${referenceWidth}px`
       : `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(0, 1fr) ${PANEL_SPLITTER_WIDTH}px ${COLLAPSED_PANEL_WIDTH}px` }}>
       <aside className="meeting-focus-timeline meeting-focus-rail-two-rows">
         <MeetingCalendar notes={allNotes} members={members} selectedMemberId={selectedMemberId} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />

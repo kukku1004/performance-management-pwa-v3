@@ -29,8 +29,8 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
   useEffect(() => setProfile(storedProfile ?? getDefaultGrowthProfile(member.id)), [member.id, storedProfile])
   useEffect(() => {
     if (!criteriaOpen) return
-    const width = Math.min(1120, window.innerWidth - 32)
-    setSimulationPopupPosition((position) => ({ ...position, x: Math.max(16, Math.min(position.x, window.innerWidth - width - 16)) }))
+    const width = Math.min(1480, window.innerWidth - 48)
+    setSimulationPopupPosition((position) => ({ ...position, x: Math.max(24, Math.min(position.x, window.innerWidth - width - 24)), y: 16 }))
   }, [criteriaOpen])
   useEffect(() => onPanelMinimizedChange?.(collapsedContent ? performancePanelMinimized : simulationPanelMinimized && performancePanelMinimized), [collapsedContent, onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
   useEffect(() => {
@@ -107,7 +107,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
     const startY = event.clientY
     const start = simulationPopupPosition
     function move(moveEvent: PointerEvent) {
-      const width = Math.min(criteriaOpen ? 1120 : 720, window.innerWidth - 32)
+      const width = Math.min(criteriaOpen ? 1480 : 760, window.innerWidth - 48)
       const height = Math.min(720, window.innerHeight - 32)
       setSimulationPopupPosition({
         x: Math.max(16, Math.min(window.innerWidth - width - 16, start.x + moveEvent.clientX - startX)),
@@ -134,14 +134,14 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
           </div>
       </div> : null}
       <div className={`${collapsedContent ? 'flex flex-1 bg-slate-50' : 'bg-white'}`}>
-        <div ref={panelRef} style={collapsedContent && !simulationPanelMinimized ? { left: simulationPopupPosition.x, top: simulationPopupPosition.y, width: criteriaOpen ? 'min(1120px, calc(100vw - 32px))' : 'min(720px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)' } : undefined} className={`${simulationPanelMinimized ? (collapsedContent ? 'hidden' : 'bg-transparent') : collapsedContent ? 'fixed z-[60] overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl transition-[width] duration-200' : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-6'} px-0`}`}>
+        <div ref={panelRef} style={collapsedContent && !simulationPanelMinimized ? { left: simulationPopupPosition.x, top: simulationPopupPosition.y, width: criteriaOpen ? 'min(1480px, calc(100vw - 48px))' : 'min(760px, calc(100vw - 48px))', height: criteriaOpen ? 'calc(100vh - 32px)' : undefined, maxHeight: 'calc(100vh - 32px)' } : undefined} className={simulationPanelMinimized ? (collapsedContent ? 'hidden' : 'bg-transparent') : collapsedContent ? `fixed z-[60] rounded-lg border border-slate-200 bg-white p-4 shadow-xl transition-[width] duration-200 ${criteriaOpen ? 'overflow-hidden' : 'overflow-y-auto'}` : `space-y-5 bg-white ${removeTopSpacing ? 'pt-0' : 'pt-6'} px-0`}>
           {simulationPanelMinimized ? (collapsedContent ? null : <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized(false) }} title="승진 시뮬레이션 영역 복원" aria-label="승진 시뮬레이션 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="text-xs font-semibold [writing-mode:vertical-rl]">승진 시뮬레이션</span></button>) : <>
           <div onPointerDown={startSimulationPopupDrag} className={`flex min-h-9 flex-wrap items-center gap-2 border-b border-slate-200 pb-3 ${collapsedContent ? 'cursor-move select-none' : ''}`}>
             <h3 className="ui-section-title">승진 시뮬레이션</h3>
             <label><span className="sr-only">승진심사 시기</span><input type="month" value={profile.promotionReviewDate} onChange={(event) => updateProfile({ promotionReviewDate: event.target.value })} className="ui-field ui-field-sm w-36 bg-white" /></label>
             <span className="ml-auto flex items-center gap-1"><button type="button" onClick={() => setCriteriaOpen((value) => !value)} aria-expanded={criteriaOpen} className={`ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0 ${criteriaOpen ? 'text-orange-600' : ''}`} title={criteriaOpen ? '승진 기준 닫기' : '승진 기준 보기'} aria-label={criteriaOpen ? '승진 기준 닫기' : '승진 기준 보기'}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg></button><button type="button" onClick={() => { setCriteriaOpen(false); setSimulationPanelMinimized(true) }} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="승진 시뮬레이션 영역 최소화" aria-label="승진 시뮬레이션 영역 최소화"><PanelToggleIcon collapsed={false} edge={simulationOnRight ? 'right' : 'left'} /></button></span>
           </div>
-          <div className={criteriaOpen ? 'grid grid-cols-[minmax(0,1fr)_minmax(390px,0.82fr)] gap-5 pt-5' : 'space-y-5 pt-5'}><div className="min-w-0 space-y-5">
+          <div className={criteriaOpen ? 'grid h-[calc(100%-48px)] grid-cols-[minmax(0,1fr)_minmax(480px,0.9fr)] gap-4 pt-4' : 'space-y-5 pt-5'}><div className={`min-w-0 ${criteriaOpen ? 'space-y-3 overflow-hidden' : 'space-y-5'}`}>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-lg bg-gray-50 px-3 py-3"><p className="text-xs font-medium text-gray-500">승진자격 점수</p><strong className="mt-1 block text-xl tabular-nums">{simulation.targetScore.toFixed(1)}점</strong></div><div className="rounded-lg bg-gray-50 px-3 py-3"><p className="text-xs font-medium text-gray-500">현재 점수</p><strong className="mt-1 block text-xl tabular-nums">{currentSimulation.currentScore.toFixed(1)}점</strong></div><div className="rounded-lg bg-blue-50 px-3 py-3"><p className="text-xs font-medium text-gray-500">시뮬레이션 가산</p><strong className="mt-1 block text-xl tabular-nums text-blue-600">{simulationBonus >= 0 ? '+' : ''}{simulationBonus.toFixed(1)}점</strong></div><div className={`rounded-lg px-3 py-3 ${expectedGap >= 0 ? 'bg-emerald-50' : 'bg-orange-50'}`}><p className="text-xs font-medium text-gray-500">최종 시뮬레이션 점수</p><strong className={`mt-1 block text-xl tabular-nums ${expectedGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{simulation.currentScore.toFixed(1)}점</strong></div></div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600"><strong className="text-gray-800">가산 근거</strong>{simulationBonusRows.length ? simulationBonusRows.map((item) => <span key={item.year} className="rounded-md border border-gray-200 bg-white px-2 py-1">{item.year}년 입력 {item.bonus >= 0 ? '+' : ''}{item.bonus.toFixed(1)}점</span>) : <span className="text-gray-400">추가 입력으로 반영된 가산점이 없습니다.</span>}</div>
           <p className="text-xs leading-5 text-slate-500">{reviewLabel} 심사 기준으로 {firstYear ?? '-'}년부터 {lastYear ?? '-'}년까지의 5년 데이터를 반영합니다.</p>

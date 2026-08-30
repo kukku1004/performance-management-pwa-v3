@@ -179,6 +179,15 @@
 .meeting-focus-document-row + .ui-panel-splitter { grid-column: 6; grid-row: 2; }
 .meeting-focus-reference { grid-column: 7; grid-row: 2; }
 
+.promotion-criteria-embedded > div:not(:first-child) { margin-top: 16px; }
+.promotion-criteria-embedded > div:not(:first-child) > p { margin-top: 4px; font-size: 12px; line-height: 1.45; }
+.promotion-criteria-embedded .py-3 { padding-top: 8px; padding-bottom: 8px; }
+.promotion-criteria-embedded .mt-3 { margin-top: 8px; }
+
+@media (max-height: 900px) {
+  .promotion-criteria-embedded { zoom: .86; width: 116.3%; height: 116.3%; }
+}
+
 .meeting-focus-timeline { min-width: 0; overflow: visible; padding: 0 8px 96px; }
 .meeting-focus-calendar-divider { min-height: 100%; background: #e5e7eb; }
 .meeting-focus-history-sidebar { min-width: 0; overflow: visible; background: #fff; padding: 140px 0 96px; }
