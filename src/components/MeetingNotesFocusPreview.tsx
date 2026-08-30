@@ -11,6 +11,7 @@ import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluat
 import type { MemberInsight } from '../utils/memberInsights'
 import InsightEvidenceButton from './InsightEvidenceButton'
 import MeetingPrintPreview from './MeetingPrintPreview'
+import GrowthHistoryImportDialog from './GrowthHistoryImportDialog'
 
 interface MeetingNotesFocusPreviewProps {
   members: TeamMember[]
@@ -84,6 +85,7 @@ export default function MeetingNotesFocusPreview({
   const [growthOpen, setGrowthOpen] = useState(false)
   const [referencePanelsMinimized, setReferencePanelsMinimized] = useState(true)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
+  const [historyImportOpen, setHistoryImportOpen] = useState(false)
   const layoutRef = useRef<HTMLDivElement>(null)
   const [referenceWidth, setReferenceWidth] = useState(() => Math.min(520, Math.max(360, window.innerWidth * 0.26)))
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
@@ -176,11 +178,12 @@ export default function MeetingNotesFocusPreview({
   }
 
   return <div className="meeting-focus-shell">
-    <div className="meeting-focus-members" role="tablist" aria-label="면담 팀원 선택">
-      {members.map((member) => <button key={member.id} type="button" role="tab" aria-selected={member.id === selectedMemberId} onClick={() => onSelectMember(member.id)} className={`meeting-focus-member-tab ${member.id === selectedMemberId ? 'meeting-focus-member-tab-active' : ''}`}>
+    <div className="meeting-focus-members">
+      <div className="flex min-w-0 flex-1 overflow-x-auto" role="tablist" aria-label="면담 팀원 선택">{members.map((member) => <button key={member.id} type="button" role="tab" aria-selected={member.id === selectedMemberId} onClick={() => onSelectMember(member.id)} className={`meeting-focus-member-tab ${member.id === selectedMemberId ? 'meeting-focus-member-tab-active' : ''}`}>
         {getMemberGrade(member.id) && <Badge tone="neutral" className="shrink-0 bg-white text-gray-900">{getMemberGrade(member.id)}</Badge>}
         <span className="truncate">{member.name}</span>
-      </button>)}
+      </button>)}</div>
+      <button type="button" onClick={() => setHistoryImportOpen(true)} className="ui-button ui-button-secondary ui-button-sm mx-3 shrink-0">지난 성과 파일 불러오기</button>
     </div>
 
     <div ref={layoutRef} className={`meeting-focus-workspace ${referencePanelsMinimized ? 'meeting-focus-workspace-expanded' : ''}`} style={{ gridTemplateColumns: !referencePanelsMinimized
@@ -248,5 +251,6 @@ export default function MeetingNotesFocusPreview({
       <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight simulationTriggerContainerId="meeting-simulation-trigger" onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
     {printPreviewOpen && <MeetingPrintPreview member={selectedMember} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
+    {historyImportOpen && <GrowthHistoryImportDialog members={members} profiles={activeTeam?.growthProfiles ?? []} onApply={(profiles) => profiles.forEach(saveGrowthProfile)} onClose={() => setHistoryImportOpen(false)} />}
   </div>
 }
