@@ -243,6 +243,6 @@ export default function MeetingNotesFocusPreview({
       <PanelSplitter aria-label="면담일지와 성과·성장 영역 너비 조절" onPointerDown={startResize} />
       <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
-    {printPreviewOpen && <MeetingPrintPreview member={selectedMember} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
+    {printPreviewOpen && <MeetingPrintPreview member={selectedMember} meetingDate={newDate} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
   </div>
 }

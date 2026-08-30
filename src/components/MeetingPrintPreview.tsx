@@ -4,18 +4,18 @@ import type { MemberEvaluationHistory } from '../utils/growth'
 import type { MemberInsight } from '../utils/memberInsights'
 import ModalCloseButton from './ModalCloseButton'
 
-type PrintOption = 'profile' | 'performance' | 'insights' | 'questions' | 'evidence' | 'lastMeeting' | 'growth' | 'draft' | 'memo'
+type PrintOption = 'profile' | 'date' | 'performance' | 'insights' | 'questions' | 'evidence' | 'lastMeeting' | 'growth' | 'draft' | 'memo'
 
 const OPTION_LABELS: Array<[PrintOption, string]> = [
-  ['profile', '팀원 기본정보'], ['performance', '현재 성과 요약'], ['insights', '핵심 인사이트'], ['questions', '추천 면담 질문'], ['evidence', '인사이트 근거'],
+  ['profile', '팀원 기본정보'], ['date', '선택한 면담일 표시'], ['performance', '현재 성과 요약'], ['insights', '핵심 인사이트'], ['questions', '추천 면담 질문'], ['evidence', '인사이트 근거'],
   ['lastMeeting', '지난 면담 요약'], ['growth', '육성 포인트 작성란'], ['draft', '작성 중인 면담 내용 포함'], ['memo', '면담 내용 입력란'],
 ]
 
-const DEFAULT_OPTIONS: Record<PrintOption, boolean> = { profile: true, performance: true, insights: true, questions: true, evidence: false, lastMeeting: true, growth: false, draft: false, memo: true }
+const DEFAULT_OPTIONS: Record<PrintOption, boolean> = { profile: true, date: true, performance: true, insights: true, questions: true, evidence: false, lastMeeting: true, growth: false, draft: false, memo: true }
 
 function escapeHtml(value: unknown) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') }
 
-export default function MeetingPrintPreview({ member, history, insights, latestNote, draft, growthPoints, onClose }: { member: TeamMember; history: MemberEvaluationHistory[]; insights: MemberInsight[]; latestNote: MeetingNote | null; draft: string; growthPoints: { strength: string; improvement: string; challenge: string; careerGoal: string }; onClose: () => void }) {
+export default function MeetingPrintPreview({ member, meetingDate, history, insights, latestNote, draft, growthPoints, onClose }: { member: TeamMember; meetingDate: string; history: MemberEvaluationHistory[]; insights: MemberInsight[]; latestNote: MeetingNote | null; draft: string; growthPoints: { strength: string; improvement: string; challenge: string; careerGoal: string }; onClose: () => void }) {
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [extraPages, setExtraPages] = useState(0)
   const latest = history[0]
@@ -24,7 +24,7 @@ export default function MeetingPrintPreview({ member, history, insights, latestN
   const growthRows = [['강점', growthPoints.strength], ['보완 필요', growthPoints.improvement], ['다음 경험', growthPoints.challenge], ['Career Goal', growthPoints.careerGoal]]
 
   function pageHeader(page: number, totalPages: number) {
-    return `<header><div><p class="eyebrow">1:1 면담 준비지</p><h1>${escapeHtml(member.name)}</h1><p>${escapeHtml(member.level || '직급 미설정')} · ${member.yearsOfService ?? '-'}년차</p></div><p>면담일 __________________</p></header>${totalPages > 1 ? `<span class="page-number">${page} / ${totalPages}</span>` : ''}`
+    return `<header><div><p class="eyebrow">1:1 면담 준비지</p><h1>${escapeHtml(member.name)}</h1><p>${escapeHtml(member.level || '직급 미설정')} · ${member.yearsOfService ?? '-'}년차</p></div><p>면담일 ${options.date && meetingDate ? escapeHtml(meetingDate.replace(/-/g, '. ')) : '__________________'}</p></header>${totalPages > 1 ? `<span class="page-number">${page} / ${totalPages}</span>` : ''}`
   }
 
   function firstPageHtml(totalPages: number) {
