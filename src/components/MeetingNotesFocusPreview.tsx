@@ -9,7 +9,7 @@ import { COLLAPSED_PANEL_WIDTH, PANEL_SPLITTER_WIDTH, PanelSplitter } from './Pa
 import { useWorkspace } from '../state/WorkspaceContext'
 import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory } from '../utils/growth'
 import type { MemberInsight } from '../utils/memberInsights'
-import InsightEvidenceDialog from './InsightEvidenceDialog'
+import InsightEvidenceButton from './InsightEvidenceButton'
 
 interface MeetingNotesFocusPreviewProps {
   members: TeamMember[]
@@ -74,7 +74,6 @@ export default function MeetingNotesFocusPreview({
 }: MeetingNotesFocusPreviewProps) {
   const { workspace, activeTeam, saveGrowthProfile } = useWorkspace()
   const [insightsOpen, setInsightsOpen] = useState(true)
-  const [selectedInsight, setSelectedInsight] = useState<MemberInsight | null>(null)
   const [historyOpen, setHistoryOpen] = useState(true)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(false)
@@ -96,7 +95,6 @@ export default function MeetingNotesFocusPreview({
 
   useEffect(() => {
     setSelectedNoteId(null)
-    setSelectedInsight(null)
   }, [selectedMemberId])
 
   useEffect(() => {
@@ -229,7 +227,7 @@ export default function MeetingNotesFocusPreview({
 
         {insights.length > 0 && <section className="mt-5 overflow-hidden rounded-lg border border-gray-200 bg-white">
           <button type="button" onClick={() => setInsightsOpen((value) => !value)} className="flex w-full items-center justify-between px-4 py-3 text-left"><h3 className="text-sm font-semibold text-gray-950">면담 인사이트</h3><DisclosureIcon open={insightsOpen} className="h-4 w-4 text-gray-500" /></button>
-          {insightsOpen && <div className="divide-y divide-gray-100 border-t border-gray-100">{insights.map((insight) => <article key={insight.id} className="px-4 py-2.5"><div className="flex items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${insight.tone === 'positive' ? 'bg-emerald-500' : insight.tone === 'attention' ? 'bg-orange-500' : 'bg-gray-400'}`} /><p className="min-w-0 flex-1 truncate text-[14px] font-medium leading-5 text-gray-900">{insight.title}</p><button type="button" onClick={() => setSelectedInsight(insight)} title="인사이트 근거 보기" aria-label={`${insight.title} 근거 보기`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-accent"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 10v6M12 7h.01" /></svg></button></div><p className="mt-1 pl-4 text-[13px] leading-5 text-gray-600"><span className="mr-1 font-semibold text-gray-500">추천 질문</span>{insight.question}</p></article>)}</div>}
+          {insightsOpen && <div className="divide-y divide-gray-100 border-t border-gray-100">{insights.map((insight) => <article key={insight.id} className="px-4 py-2.5"><div className="flex items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${insight.tone === 'positive' ? 'bg-emerald-500' : insight.tone === 'attention' ? 'bg-orange-500' : 'bg-gray-400'}`} /><p className="min-w-0 flex-1 truncate text-[14px] font-medium leading-5 text-gray-900">{insight.title}</p><InsightEvidenceButton evidence={insight.evidence} label={insight.title} /></div><p className="mt-1 pl-4 text-[13px] leading-5 text-gray-600"><span className="mr-1 font-semibold text-gray-500">추천 질문</span>{insight.question}</p></article>)}</div>}
         </section>}
 
         <section className="mt-7">
@@ -243,6 +241,5 @@ export default function MeetingNotesFocusPreview({
       <PanelSplitter aria-label="면담일지와 성과·성장 영역 너비 조절" onPointerDown={startResize} />
       <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
-    <InsightEvidenceDialog insight={selectedInsight} onClose={() => setSelectedInsight(null)} />
   </div>
 }
