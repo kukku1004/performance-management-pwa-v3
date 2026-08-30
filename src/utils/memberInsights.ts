@@ -25,14 +25,22 @@ function recentMeetingInsight(notes: MeetingNote[]): MemberInsight | null {
   if (!latest) return null
   const growth = latest.growthPoints
   const focus = growth?.challenge || growth?.improvement || growth?.careerGoal
+  const normalizedComment = latest.comment.replace(/\s+/g, ' ').trim()
+  const meetingSummary = normalizedComment.length > 52 ? `${normalizedComment.slice(0, 52)}…` : normalizedComment
+  const growthEvidence = growth ? [
+    growth.strength && { label: '강점', value: growth.strength },
+    growth.improvement && { label: '보완 필요', value: growth.improvement },
+    growth.challenge && { label: '다음 도전 경험', value: growth.challenge },
+    growth.careerGoal && { label: 'Career Goal', value: growth.careerGoal },
+  ].filter((item): item is { label: string; value: string } => Boolean(item)) : []
   return {
     id: 'recent-meeting',
-    title: focus ? '지난 면담의 성장 주제를 이어가면 좋습니다' : '지난 면담 이후의 변화를 확인할 시점입니다',
-    summary: focus ? `지난 면담에서 “${focus}”을 이야기했습니다.` : `${latest.date} 면담 이후 달라진 점을 확인해 보세요.`,
+    title: focus ? `지난 면담의 “${focus}”을 이어서 확인해 보세요` : `지난 면담: ${meetingSummary}`,
+    summary: meetingSummary,
     question: focus ? `지난 면담에서 이야기한 “${focus}”은 지금 어떻게 진행되고 있나요?` : '지난 면담 이후 업무에서 가장 크게 달라진 점은 무엇인가요?',
     evidence: [
-      { label: '최근 면담', value: latest.date, detail: latest.comment },
-      ...(focus ? [{ label: '육성 포인트', value: focus }] : []),
+      { label: '지난 면담 요약', value: latest.comment },
+      ...growthEvidence,
     ],
     tone: 'neutral',
   }
