@@ -38,7 +38,7 @@ export default function TaskManagement() {
 
   function addTask() {
     const name = newForm.name.trim()
-    if (!name || !newForm.objective.trim()) { setNewFormError(!name ? '과제명을 입력하세요.' : '목표를 입력하세요.'); return }
+    if (!name) { setNewFormError('과제명을 입력하세요.'); return }
     if (state.tasks.some((task) => task.name === name)) { setNewFormError(`과제명 '${name}'은(는) 이미 존재합니다.`); return }
     const task: Task = { id: uuidv4(), ...newForm, name, objective: newForm.objective.trim(), achievement: newForm.achievement.trim() }
     dispatch({ type: 'ADD_TASK', payload: task })
@@ -55,7 +55,7 @@ export default function TaskManagement() {
 
   function saveEdit(task: Task) {
     const name = editForm.name.trim()
-    if (!name || !editForm.objective.trim()) { setEditFormError(!name ? '과제명을 입력하세요.' : '목표를 입력하세요.'); return }
+    if (!name) { setEditFormError('과제명을 입력하세요.'); return }
     if (state.tasks.some((item) => item.id !== task.id && item.name === name)) { setEditFormError(`과제명 '${name}'은(는) 이미 존재합니다.`); return }
     dispatch({ type: 'UPDATE_TASK', payload: { ...task, ...editForm, name, objective: editForm.objective.trim(), achievement: editForm.achievement.trim() } })
     setEditingTaskId(null)
@@ -181,7 +181,7 @@ export default function TaskManagement() {
           <label className="text-sm font-medium text-black">과제등급<select value={newForm.importance} disabled={state.criteria.taskGradeWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, importance: event.target.value as Importance }))} className="ui-field mt-1 disabled:bg-gray-100">{IMPORTANCE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
           <label className="text-sm font-medium text-black">업무량<select value={newForm.workload} disabled={state.criteria.workloadWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, workload: event.target.value as Workload }))} className="ui-field mt-1 disabled:bg-gray-100">{WORKLOAD_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
           <label className="text-sm font-medium text-black">성과등급<select value={newForm.performanceGrade} disabled={state.criteria.performanceGradeWeight === 0} onChange={(event) => setNewForm((form) => ({ ...form, performanceGrade: event.target.value as PerformanceGrade }))} className="ui-field mt-1 disabled:bg-gray-100">{PERFORMANCE_GRADE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label className="text-sm font-medium text-black">목표 <span className="text-danger">*</span><input value={newForm.objective} onChange={(event) => setNewForm((form) => ({ ...form, objective: event.target.value }))} placeholder="예: 전환율 15% 개선" className="ui-field mt-1" /></label>
+          <label className="text-sm font-medium text-black">목표<input value={newForm.objective} onChange={(event) => setNewForm((form) => ({ ...form, objective: event.target.value }))} placeholder="예: 전환율 15% 개선 (선택)" className="ui-field mt-1" /></label>
           <label className="text-sm font-medium text-black">성과<input value={newForm.achievement} onChange={(event) => setNewForm((form) => ({ ...form, achievement: event.target.value }))} placeholder="예: 전환율 18% 달성 (선택)" className="ui-field mt-1" /></label>
           <button type="button" onClick={addTask} className="ui-button ui-button-primary self-end whitespace-nowrap">+ 과제 추가</button>
         </div>
