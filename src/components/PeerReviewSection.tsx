@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppState } from '../state/AppContext'
 import { useWorkspace } from '../state/WorkspaceContext'
-import type { PerformanceGrade } from '../types'
+import type { PeerReview, PerformanceGrade } from '../types'
 import { downloadMemberPeerReviewTemplates, parseIntegratedPeerReviewWorkbook, parseProjectPeerReviewWorkbook } from '../utils/excel'
 import { mergePeerReviews } from '../utils/peerReview'
 import { evaluationPeriodFolderName, formatEvaluationPeriod } from '../utils/workspace'
@@ -20,6 +20,32 @@ function average(values: number[]) {
 function gradeLabel(score: number | null) {
   if (score === null) return '-'
   return GRADES[Math.max(0, Math.min(GRADES.length - 1, 5 - Math.round(score)))]
+}
+
+function taskReviewInsight(reviews: PeerReview[], targetMemberId: string) {
+  const peers = reviews.filter((review) => review.reviewerMemberId !== targetMemberId)
+  const grades = peers.flatMap((review) => review.grade ? [review.grade] : [])
+  let gradeLine = '아직 동료 평가가 없습니다.'
+  if (grades.length === 1) gradeLine = `동료 1명이 ${grades[0]}로 평가했습니다. 다른 의견이 더 필요합니다.`
+  if (grades.length > 1) {
+    const unique = [...new Set(grades)]
+    if (unique.length === 1) gradeLine = `동료 ${grades.length}명이 모두 ${unique[0]}로 평가했습니다. 이견이 없습니다.`
+    else {
+      const sorted = [...grades].sort((a, b) => GRADE_SCORE[b] - GRADE_SCORE[a])
+      const highest = sorted[0]
+      const lowest = sorted[sorted.length - 1]
+      gradeLine = GRADE_SCORE[highest] - GRADE_SCORE[lowest] >= 2
+        ? `평가가 ${highest}부터 ${lowest}까지 갈립니다. 평균만으로 판단하기 어렵습니다.`
+        : `동료 ${grades.length}명의 평가가 ${lowest}~${highest} 사이로 대체로 모입니다.`
+    }
+  }
+  const contributions = peers.filter((review) => review.contributionPercent !== null).sort((a, b) => (a.contributionPercent ?? 0) - (b.contributionPercent ?? 0))
+  const lowest = contributions[0]
+  const highest = contributions[contributions.length - 1]
+  const contributionLine = lowest && highest && (highest.contributionPercent ?? 0) - (lowest.contributionPercent ?? 0) >= 10
+    ? `${lowest.reviewerName}은 ${lowest.contributionPercent}%, ${highest.reviewerName}은 ${highest.contributionPercent}%로 봤습니다. 기여도 체감이 다릅니다.`
+    : null
+  return { gradeLine, contributionLine, peerCount: new Set(peers.map((review) => review.reviewerMemberId || review.reviewerName)).size }
 }
 
 function MiniChartIcon() {
@@ -131,22 +157,33 @@ export default function PeerReviewSection() {
     return { member, reviews, contribution, grade, gradeSpread }
   }), [activeTaskViewTaskId, filterReviewerId, state.peerReviews, taskViewMemberOptions])
   const activeTaskViewResult = taskViewMemberResults.find((result) => result.member.id === activeTaskViewMemberId)
-  const perspectiveTargetId = dashboardView === 'member' ? activeDashboardMemberId : activeTaskViewMemberId
-  const perspectiveReviews = useMemo(() => state.peerReviews.filter((review) => (
-    review.targetMemberId === perspectiveTargetId
-    && (dashboardView === 'member' || review.taskId === activeTaskViewTaskId)
-    && (!filterReviewerId || review.reviewerMemberId === filterReviewerId)
-  )), [activeTaskViewTaskId, dashboardView, filterReviewerId, perspectiveTargetId, state.peerReviews])
-  const perspective = useMemo(() => {
-    const selfReviews = perspectiveReviews.filter((review) => review.reviewerMemberId === perspectiveTargetId)
-    const peerReviews = perspectiveReviews.filter((review) => review.reviewerMemberId !== perspectiveTargetId)
-    const summarize = (reviews: typeof perspectiveReviews) => ({
-      grade: average(reviews.flatMap((review) => review.grade ? [GRADE_SCORE[review.grade]] : [])),
-      contribution: average(reviews.flatMap((review) => review.contributionPercent === null ? [] : [review.contributionPercent])),
-    })
-    const evidenceRate = perspectiveReviews.length === 0 ? 0 : Math.round(perspectiveReviews.filter((review) => review.evidence.trim()).length / perspectiveReviews.length * 100)
-    return { self: summarize(selfReviews), peers: summarize(peerReviews), peerCount: new Set(peerReviews.map((review) => review.reviewerMemberId)).size, evidenceRate }
-  }, [perspectiveReviews, perspectiveTargetId])
+  const peerTaskResults = state.members.flatMap((member) => state.tasks.flatMap((task) => {
+    const reviews = filteredReviews.filter((review) => review.targetMemberId === member.id && review.taskId === task.id && review.reviewerMemberId !== member.id)
+    if (reviews.length === 0) return []
+    const contribution = average(reviews.flatMap((review) => review.contributionPercent === null ? [] : [review.contributionPercent]))
+    const gradeScores = reviews.flatMap((review) => review.grade ? [GRADE_SCORE[review.grade]] : [])
+    const grade = average(gradeScores)
+    const gradeSpread = gradeScores.length < 2 ? 0 : Math.max(...gradeScores) - Math.min(...gradeScores)
+    return [{ member, task, reviews, contribution, grade, gradeSpread }]
+  }))
+  const highestGradeResult = peerTaskResults.reduce<(typeof peerTaskResults)[number] | null>((highest, result) => (
+    result.grade !== null && (highest?.grade === null || highest?.grade === undefined || result.grade > highest.grade) ? result : highest
+  ), null)
+  const reviewItemsToCheck = peerTaskResults.filter((result) => result.gradeSpread >= 2).length
+  const evidenceRate = filteredReviews.length === 0 ? 0 : Math.round(filteredReviews.filter((review) => review.evidence.trim()).length / filteredReviews.length * 100)
+  const activeMemberPeerResults = peerTaskResults.filter((result) => result.member.id === activeDashboardMemberId)
+  const activeMemberPeerGrade = average(activeMemberPeerResults.flatMap((result) => result.grade === null ? [] : [result.grade]))
+  const teamPeerGrade = average(state.members.flatMap((member) => {
+    const results = peerTaskResults.filter((result) => result.member.id === member.id)
+    const memberGrade = average(results.flatMap((result) => result.grade === null ? [] : [result.grade]))
+    return memberGrade === null ? [] : [memberGrade]
+  }))
+  const activeMemberStanding = activeMemberPeerGrade === null || teamPeerGrade === null
+    ? '동료 평가가 더 모이면 팀 내 위치를 확인할 수 있습니다.'
+    : activeMemberPeerGrade >= teamPeerGrade + 0.5 ? '팀 평균보다 높게 평가받습니다.'
+      : activeMemberPeerGrade <= teamPeerGrade - 0.5 ? '팀 평균보다 낮게 평가받습니다.'
+        : '팀 평균 수준으로 평가받습니다.'
+  const activeTaskInsight = activeTaskResult ? taskReviewInsight(activeTaskResult.reviews, activeDashboardMemberId) : null
 
   const previewMember = state.members.find((member) => member.id === previewMemberId) ?? state.members[0]
   const previewTask = state.tasks.find((task) => task.id === previewTaskId) ?? state.tasks[0]
@@ -293,7 +330,6 @@ export default function PeerReviewSection() {
         <div className="flex gap-2">
           <button type="button" disabled={!ready} onClick={openTemplateDialog} className={`ui-button ${submittedCount > 0 ? 'ui-button-secondary' : 'ui-button-primary'}`}>팀원별 양식 만들기</button>
           <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">결과 업로드</button>
-          <button type="button" aria-haspopup="dialog" onClick={() => setEditorOpen(true)} className="ui-button ui-button-ghost">값 조정</button>
           <input ref={inputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { void upload(event.target.files); event.target.value = '' }} />
         </div>
       </div>
@@ -318,24 +354,24 @@ export default function PeerReviewSection() {
       ) : <>
         <section aria-label="피어리뷰 결과" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200">
-            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto px-1" role="tablist" aria-label={dashboardView === 'member' ? '팀원 선택' : '과제 선택'}>{dashboardView === 'member' ? dashboardMemberOptions.map((member) => <button key={member.id} type="button" role="tab" aria-selected={activeDashboardMemberId === member.id} onClick={() => { setFilterMemberId(member.id); setFilterTaskId('') }} className={`shrink-0 rounded-t-lg border-x border-t px-5 py-3 text-sm font-semibold ${activeDashboardMemberId === member.id ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white'}`}>{member.name}</button>) : taskViewTaskOptions.map((task) => <button key={task.id} type="button" role="tab" aria-selected={activeTaskViewTaskId === task.id} onClick={() => { setFilterTaskId(task.id); setFilterMemberId('') }} className={`max-w-56 shrink-0 truncate rounded-t-lg border-x border-t px-5 py-3 text-sm font-semibold ${activeTaskViewTaskId === task.id ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white'}`}>{task.name}</button>)}</div>
-            <div className="mb-2 flex shrink-0 items-center gap-2"><div className="flex rounded-md border border-gray-200 bg-white p-0.5" role="tablist" aria-label="피어리뷰 분석 기준"><button type="button" role="tab" aria-selected={dashboardView === 'member'} onClick={() => { setDashboardView('member'); setFilterMemberId(''); setFilterTaskId('') }} className={`ui-button ui-button-sm ${dashboardView === 'member' ? 'bg-gray-950 text-white' : 'ui-button-ghost text-gray-500'}`}>팀원별 보기</button><button type="button" role="tab" aria-selected={dashboardView === 'task'} onClick={() => { setDashboardView('task'); setFilterMemberId(''); setFilterTaskId('') }} className={`ui-button ui-button-sm ${dashboardView === 'task' ? 'bg-gray-950 text-white' : 'ui-button-ghost text-gray-500'}`}>과제별 근거</button></div><select aria-label="리뷰어 필터" value={filterReviewerId} onChange={(event) => { setFilterReviewerId(event.target.value); setFilterTaskId('') }} className="ui-field ui-field-sm w-36"><option value="">전체 리뷰어</option>{state.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></div>
+            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto px-1" role="tablist" aria-label={dashboardView === 'member' ? '팀원 선택' : '과제 선택'}>{dashboardView === 'member' ? dashboardMemberOptions.map((member) => { const result = memberTaskDashboard.find((item) => item.member.id === member.id); return <button key={member.id} type="button" role="tab" aria-selected={activeDashboardMemberId === member.id} onClick={() => { setFilterMemberId(member.id); setFilterTaskId('') }} className={`flex shrink-0 items-center gap-2 rounded-t-lg border-x border-t px-5 py-3 text-sm font-semibold ${activeDashboardMemberId === member.id ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white'}`}><span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full border px-1.5 text-xs ${activeDashboardMemberId === member.id ? 'border-white/30 bg-white text-gray-950' : 'border-gray-200 bg-white text-gray-600'}`}>{gradeLabel(result?.grade ?? null)}</span>{member.name}</button> }) : taskViewTaskOptions.map((task) => <button key={task.id} type="button" role="tab" aria-selected={activeTaskViewTaskId === task.id} onClick={() => { setFilterTaskId(task.id); setFilterMemberId('') }} className={`max-w-56 shrink-0 truncate rounded-t-lg border-x border-t px-5 py-3 text-sm font-semibold ${activeTaskViewTaskId === task.id ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white'}`}>{task.name}</button>)}</div>
+            <div className="mb-2 flex shrink-0 rounded-md border border-gray-200 bg-white p-0.5" role="tablist" aria-label="피어리뷰 분석 기준"><button type="button" role="tab" aria-selected={dashboardView === 'member'} onClick={() => { setDashboardView('member'); setFilterMemberId(''); setFilterTaskId(''); setFilterReviewerId('') }} className={`ui-button ui-button-sm ${dashboardView === 'member' ? 'bg-gray-950 text-white' : 'ui-button-ghost text-gray-500'}`}>팀원별 보기</button><button type="button" role="tab" aria-selected={dashboardView === 'task'} onClick={() => { setDashboardView('task'); setFilterMemberId(''); setFilterTaskId(''); setFilterReviewerId('') }} className={`ui-button ui-button-sm ${dashboardView === 'task' ? 'bg-gray-950 text-white' : 'ui-button-ghost text-gray-500'}`}>과제별 보기</button></div>
           </div>
 
-          <section aria-label="본인 평가와 동료 평가 비교" className="grid overflow-hidden rounded-lg border border-gray-200 bg-white lg:grid-cols-[180px_180px_minmax(0,1fr)]">
-            <div className="px-4 py-3"><span className="text-xs font-medium text-gray-500">본인 평가</span><strong className="mt-1 block text-base text-gray-950">{gradeLabel(perspective.self.grade)} · {perspective.self.contribution === null ? '-' : `${perspective.self.contribution.toFixed(1)}%`}</strong></div>
-            <div className="border-gray-200 px-4 py-3 lg:border-l"><span className="text-xs font-medium text-gray-500">동료 평균 <span className="text-gray-400">{perspective.peerCount}명</span></span><strong className="mt-1 block text-base text-gray-950">{gradeLabel(perspective.peers.grade)} · {perspective.peers.contribution === null ? '-' : `${perspective.peers.contribution.toFixed(1)}%`}</strong></div>
-            <div className="border-gray-200 px-4 py-3 lg:border-l"><span className="text-xs font-medium text-gray-500">인식 차이</span><p className="mt-1 text-sm leading-5 text-gray-700">{perspective.self.grade === null || perspective.peers.grade === null ? '본인과 동료 평가가 모두 모이면 차이를 확인할 수 있습니다.' : Math.abs(perspective.self.grade - perspective.peers.grade) < 0.5 ? '본인과 동료가 성과 수준을 비슷하게 보고 있습니다.' : perspective.self.grade < perspective.peers.grade ? '동료가 본인보다 성과를 더 높게 평가하고 있습니다.' : '본인이 동료보다 성과를 더 높게 평가하고 있습니다.'} <span className="text-gray-400">근거 작성률 {perspective.evidenceRate}%</span></p></div>
+          <section className="grid items-stretch border-b border-gray-200 py-3 lg:grid-cols-[minmax(260px,1fr)_repeat(4,minmax(140px,0.72fr))]">
+            <div className="flex min-w-0 flex-col justify-center px-5 py-3">{dashboardView === 'member' && activeMemberResult ? <><div className="flex items-center gap-2"><h5 className="text-base font-semibold text-gray-950">{activeMemberResult.member.name}</h5><span className="text-xs text-gray-500">{activeMemberResult.member.level || activeMemberResult.member.position || '직급 미설정'}</span></div><p className="mt-1 text-xs text-gray-500">{activeMemberResult.tasks.length}개 과제 · 리뷰 {activeMemberResult.reviewCount}건</p><p className="mt-1 text-sm font-medium text-gray-800">{activeMemberStanding}</p><p className="mt-1 text-xs text-gray-500">종합등급 {gradeLabel(activeMemberResult.grade)} · 평균 기여도 {activeMemberResult.contribution === null ? '-' : `${activeMemberResult.contribution.toFixed(1)}%`}</p></> : <><h5 className="text-base font-semibold text-gray-950">{activeTaskViewTask?.name ?? '-'}</h5><p className="mt-1 text-xs text-gray-500">평가 대상 {taskViewMemberResults.length}명 · 리뷰 {taskViewMemberResults.reduce((sum, result) => sum + result.reviews.length, 0)}건</p></>}</div>
+            <div className="border-l border-gray-200 px-4 py-3"><span className="text-xs font-medium text-gray-500">평가받은 팀원</span><strong className="mt-1 block text-lg text-gray-950">{dashboardMemberOptions.length}명</strong><span className="mt-1 block text-xs text-gray-400">리뷰 {filteredReviews.length}건</span></div>
+            <div className="border-l border-gray-200 px-4 py-3"><span className="text-xs font-medium text-gray-500">피어리뷰 평가 영향</span><strong className="mt-1 block text-lg text-gray-950">{state.criteria.peerReviewWeight}%</strong><span className="mt-1 block text-xs text-gray-400">{state.criteria.peerReviewWeight === 0 ? '현재 점수에 반영되지 않음' : '평가 계산 반영 비율'}</span></div>
+            <div className="border-l border-gray-200 px-4 py-3"><span className="text-xs font-medium text-gray-500">동료 평가가 높은 팀원</span><strong className="mt-1 block truncate text-sm text-gray-950">{highestGradeResult?.member.name ?? '-'}</strong><span className="mt-1 block truncate text-xs font-medium text-accent">{highestGradeResult ? `${highestGradeResult.task.name} · ${gradeLabel(highestGradeResult.grade)}` : '-'}</span></div>
+            <div className="border-l border-gray-200 px-4 py-3"><span className="text-xs font-medium text-gray-500">확인할 항목</span><strong className="mt-1 block text-lg text-gray-950">{reviewItemsToCheck}건</strong><span className="mt-1 block text-xs text-gray-400">등급 의견 차이 · 근거 작성률 {evidenceRate}%</span></div>
           </section>
 
-          {dashboardView === 'member' ? (!activeMemberResult || !activeTaskResult ? <div className="ui-empty py-12">조건에 맞는 리뷰가 없습니다.</div> : <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3"><div><div className="flex items-center gap-2"><h5 className="text-base font-semibold text-gray-950">{activeMemberResult.member.name}</h5><span className="text-xs text-gray-500">{activeMemberResult.member.level || activeMemberResult.member.position || '직급 미설정'}</span></div><p className="mt-1 text-xs text-gray-500">{activeMemberResult.tasks.length}개 과제 · 리뷰 {activeMemberResult.reviewCount}건</p></div><div className="flex items-center gap-4 text-sm"><span className="text-gray-500">종합등급 <strong className="ml-1 text-gray-950">{gradeLabel(activeMemberResult.grade)}</strong></span><span className="text-gray-500">평균 기여도 <strong className="ml-1 tabular-nums text-gray-950">{activeMemberResult.contribution === null ? '-' : `${activeMemberResult.contribution.toFixed(1)}%`}</strong></span></div></header>
-            <div className="grid min-h-[360px] lg:grid-cols-[280px_minmax(0,1fr)]">
-              <aside className="border-b border-gray-200 bg-gray-50/60 p-3 lg:border-b-0 lg:border-r"><p className="px-2 text-xs font-semibold text-gray-500">과제별 종합</p><div className="mt-2 flex gap-2 overflow-x-auto pb-1 lg:max-h-[420px] lg:flex-col lg:overflow-y-auto">{dashboardTaskOptions.map((task) => { const result = activeMemberResult.tasks.find((item) => item.task.id === task.id); const active = task.id === activeDashboardTaskId; return <button key={task.id} type="button" onClick={() => setFilterTaskId(task.id)} className={`min-w-56 rounded-md border p-3 text-left lg:min-w-0 ${active ? 'border-accent bg-white ring-1 ring-accent' : 'border-gray-200 bg-white hover:border-gray-400'}`}><span className="block truncate text-sm font-semibold text-gray-900">{task.name}</span><span className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-500"><span>종합 {gradeLabel(result?.grade ?? null)}</span><span>{result?.contribution === null || result?.contribution === undefined ? '-' : `${result.contribution.toFixed(1)}%`}</span></span></button> })}</div></aside>
-              <article className="min-w-0 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h6 className="text-sm font-semibold text-gray-950">{activeTaskResult.task.name}</h6><p className="mt-1 text-xs text-gray-500">과제별 종합 리뷰 · {activeTaskResult.reviews.length}명 평가</p></div><div className="flex flex-wrap items-center gap-2"><Badge tone="accent">종합 {gradeLabel(activeTaskResult.grade)}</Badge><Badge tone="neutral">기여도 {activeTaskResult.contribution === null ? '-' : `${activeTaskResult.contribution.toFixed(1)}%`}</Badge>{activeTaskResult.gradeSpread >= 2 && <Badge tone="danger">의견 차이 확인</Badge>}</div></div>
+          {dashboardView === 'member' ? (!activeMemberResult || !activeTaskResult ? <div className="ui-empty py-12">조건에 맞는 리뷰가 없습니다.</div> : <section className="grid min-h-[330px] border-b border-gray-200 lg:grid-cols-[280px_minmax(0,1fr)]">
+              <aside className="border-b border-gray-200 pr-5 lg:border-b-0 lg:border-r"><p className="py-2 text-xs font-semibold text-gray-500">과제별 종합</p><div className="flex gap-2 overflow-x-auto pb-4 lg:max-h-[390px] lg:flex-col lg:overflow-y-auto">{dashboardTaskOptions.map((task) => { const result = activeMemberResult.tasks.find((item) => item.task.id === task.id); const active = task.id === activeDashboardTaskId; return <button key={task.id} type="button" onClick={() => setFilterTaskId(task.id)} className={`min-w-56 rounded-md border p-3 text-left lg:min-w-0 ${active ? 'border-accent bg-white ring-1 ring-accent' : 'border-gray-200 bg-white hover:border-gray-400'}`}><span className="block truncate text-sm font-semibold text-gray-900">{task.name}</span><span className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-500"><span>종합 {gradeLabel(result?.grade ?? null)}</span><span>{result?.contribution === null || result?.contribution === undefined ? '-' : `${result.contribution.toFixed(1)}%`}</span></span></button> })}</div></aside>
+              <article className="min-w-0 py-3 pl-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h6 className="text-sm font-semibold text-gray-950">{activeTaskResult.task.name}</h6><p className="mt-1 text-xs text-gray-500">과제별 종합 리뷰 · 동료 {activeTaskInsight?.peerCount ?? 0}명</p></div><div className="flex flex-wrap items-center gap-2"><Badge tone="accent">종합 {gradeLabel(activeTaskResult.grade)}</Badge><Badge tone="neutral">기여도 {activeTaskResult.contribution === null ? '-' : `${activeTaskResult.contribution.toFixed(1)}%`}</Badge>{activeTaskResult.gradeSpread >= 2 && <Badge tone="danger">의견 차이 확인</Badge>}</div></div>
+                {activeTaskInsight && <div className="mt-3 border-l-2 border-accent pl-3"><p className="text-sm font-medium leading-5 text-gray-900">{activeTaskInsight.gradeLine}</p>{activeTaskInsight.contributionLine && <p className="mt-1 text-xs leading-5 text-gray-500">{activeTaskInsight.contributionLine}</p>}</div>}
                 <div className="mt-3 max-h-[420px] overflow-auto rounded-md border border-gray-200"><div className="sticky top-0 grid min-w-[640px] grid-cols-[140px_60px_80px_minmax(260px,1fr)] gap-3 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500"><span>평가자</span><span className="text-center">등급</span><span className="text-right">기여도</span><span>핵심 의견</span></div><div className="min-w-[640px] divide-y divide-gray-100">{activeTaskResult.reviews.map((review) => <div key={review.id} className="grid grid-cols-[140px_60px_80px_minmax(260px,1fr)] items-start gap-3 px-3 py-3 text-sm"><span className="flex items-center gap-1.5 font-medium text-gray-800">{review.reviewerName}{review.reviewerMemberId === activeMemberResult.member.id && <Badge tone="neutral">본인</Badge>}</span><span className="text-center font-semibold text-gray-950">{review.grade ?? '-'}</span><span className="text-right tabular-nums text-gray-700">{review.contributionPercent === null ? '-' : `${review.contributionPercent}%`}</span><span className={review.evidence ? 'leading-5 text-gray-700' : 'text-gray-400'}>{review.evidence || '작성된 근거 없음'}</span></div>)}</div></div>
               </article>
-            </div>
           </section>) : (!activeTaskViewTask || !activeTaskViewMember || !activeTaskViewResult ? <div className="ui-empty py-12">조건에 맞는 리뷰가 없습니다.</div> : <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3"><div><h5 className="text-base font-semibold text-gray-950">{activeTaskViewTask.name}</h5><p className="mt-1 text-xs text-gray-500">평가 대상 {taskViewMemberResults.length}명 · 리뷰 {taskViewMemberResults.reduce((sum, result) => sum + result.reviews.length, 0)}건</p></div><p className="text-sm text-gray-500">과제 안에서 팀원들이 서로 평가한 결과</p></header>
             <div className="grid min-h-[360px] lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -347,7 +383,7 @@ export default function PeerReviewSection() {
           </section>)}
         </section>
 
-        <details className="rounded-lg border border-gray-200 bg-white"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">원본 데이터 보기 · {filteredReviews.length}건</summary><div className="max-h-[420px] overflow-auto border-t border-gray-200 p-3"><div className="ui-table-wrap"><table className="ui-table min-w-[760px]"><thead><tr><th>과제</th><th>리뷰어</th><th>팀원</th><th className="text-right">기여도</th><th className="text-center">등급</th><th>근거</th></tr></thead><tbody>{filteredReviews.map((review) => <tr key={review.id}><td>{state.tasks.find((task) => task.id === review.taskId)?.name ?? '-'}</td><td>{review.reviewerName}</td><td>{state.members.find((member) => member.id === review.targetMemberId)?.name ?? '-'}</td><td className="text-right tabular-nums">{review.contributionPercent === null ? '-' : `${review.contributionPercent}%`}</td><td className="text-center font-semibold">{review.grade ?? '-'}</td><td className="max-w-[360px] whitespace-normal">{review.evidence || '-'}</td></tr>)}</tbody></table></div></div></details>
+        <div className="flex items-start gap-2"><details className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">원본 데이터 보기 · {filteredReviews.length}건</summary><div className="max-h-[420px] overflow-auto border-t border-gray-200 p-3"><div className="ui-table-wrap"><table className="ui-table min-w-[760px]"><thead><tr><th>과제</th><th>리뷰어</th><th>팀원</th><th className="text-right">기여도</th><th className="text-center">등급</th><th>근거</th></tr></thead><tbody>{filteredReviews.map((review) => <tr key={review.id}><td>{state.tasks.find((task) => task.id === review.taskId)?.name ?? '-'}</td><td>{review.reviewerName}</td><td>{state.members.find((member) => member.id === review.targetMemberId)?.name ?? '-'}</td><td className="text-right tabular-nums">{review.contributionPercent === null ? '-' : `${review.contributionPercent}%`}</td><td className="text-center font-semibold">{review.grade ?? '-'}</td><td className="max-w-[360px] whitespace-normal">{review.evidence || '-'}</td></tr>)}</tbody></table></div></div></details><button type="button" aria-haspopup="dialog" onClick={() => setEditorOpen(true)} className="ui-button ui-button-ghost shrink-0">값 조정</button></div>
 
         {editorOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"><div role="dialog" aria-modal="true" aria-labelledby="peer-editor-title" className="flex max-h-[min(760px,calc(100vh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
           <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4"><div><h2 id="peer-editor-title" className="text-lg font-semibold text-gray-950">업로드 값 조정</h2><p className="mt-1 text-sm text-gray-500">과제와 리뷰어를 선택한 뒤 필요한 값만 수정합니다.</p></div><ModalCloseButton onClick={() => setEditorOpen(false)} label="업로드 값 조정 닫기" /></div>
