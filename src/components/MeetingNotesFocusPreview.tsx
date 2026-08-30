@@ -81,6 +81,7 @@ export default function MeetingNotesFocusPreview({
   const [noteColorPicker, setNoteColorPicker] = useState<string | null>(null)
   const [growthOpen, setGrowthOpen] = useState(false)
   const [performanceOpen, setPerformanceOpen] = useState(false)
+  const [scoreDetailsOpen, setScoreDetailsOpen] = useState(false)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
   const loadedNote = selectedNoteId ? notes.find((note) => note.id === selectedNoteId) ?? null : null
@@ -89,10 +90,18 @@ export default function MeetingNotesFocusPreview({
   const currentSimulation = calculatePromotionSimulation(evaluationHistory, { ...storedProfile, performanceHistory: [] }, selectedMember.level)
   const expectedSimulation = calculatePromotionSimulation(evaluationHistory, storedProfile, selectedMember.level)
   const expectedGap = Math.round((expectedSimulation.currentScore - expectedSimulation.targetScore) * 10) / 10
+  const simulationBonus = Math.round((expectedSimulation.currentScore - currentSimulation.currentScore) * 10) / 10
+  const simulationBonusRows = expectedSimulation.rows.flatMap((row) => {
+    const currentRow = currentSimulation.rows.find((item) => item.year === row.year)
+    const bonus = Math.round((row.weighted - (currentRow?.weighted ?? 0)) * 10) / 10
+    return Math.abs(bonus) < 0.1 ? [] : [{ year: row.year, bonus }]
+  })
   const personalNotes = (storedProfile.personalNotes ?? []).map((note, index) => typeof note === 'string' ? { id: `legacy-${index}`, content: note, color: 'gray' as const } : note)
 
   useEffect(() => {
     setSelectedNoteId(null)
+    setScoreDetailsOpen(false)
+    setPerformanceOpen(false)
   }, [selectedMemberId])
 
   useEffect(() => {
@@ -188,13 +197,15 @@ export default function MeetingNotesFocusPreview({
             <div className="meeting-focus-score-grid">
               <div><p>목표 점수</p><strong>{expectedSimulation.targetScore}점</strong></div>
               <div><p>현재 점수</p><strong>{currentSimulation.currentScore}점</strong></div>
-              <div className={`meeting-focus-score-final ${expectedGap >= 0 ? 'meeting-focus-score-final-met' : 'meeting-focus-score-final-short'}`}><p>최종 기대 점수</p><span className="meeting-focus-score-result"><strong>{expectedSimulation.currentScore}점</strong><em className={expectedGap >= 0 ? 'text-green-500' : 'text-orange-600'}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</em></span></div>
+              <button type="button" onClick={() => setScoreDetailsOpen((value) => !value)} aria-expanded={scoreDetailsOpen} className={`meeting-focus-score-final text-left ${expectedGap >= 0 ? 'meeting-focus-score-final-met' : 'meeting-focus-score-final-short'}`}><p>최종 기대 점수</p><span className="meeting-focus-score-result"><strong>{expectedSimulation.currentScore}점</strong><em className={expectedGap >= 0 ? 'text-green-500' : 'text-orange-600'}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</em><DisclosureIcon open={scoreDetailsOpen} className="ml-1 h-3.5 w-3.5 text-gray-400" /></span></button>
             </div>
             <div id="meeting-simulation-trigger" className="flex shrink-0 items-center" />
           </div>
         </section>
 
-        <section className="border-b border-gray-200 bg-white py-3"><button type="button" onClick={() => setPerformanceOpen((value) => !value)} className="flex w-full items-center justify-between text-left"><span className="flex items-center gap-2"><strong className="text-sm text-gray-900">성과</strong><span className="text-xs text-gray-400">평가기간별 성과 요약</span></span><DisclosureIcon open={performanceOpen} className="h-4 w-4 text-gray-500" /></button>{performanceOpen && <div className="mt-4"><RecentPerformanceSummary member={selectedMember} /></div>}</section>
+        {scoreDetailsOpen && <section className="border-b border-gray-200 bg-white py-4" aria-label="최종 기대 점수 상세"><div className="flex flex-wrap items-stretch gap-3"><div className="min-w-36 rounded-lg bg-gray-50 px-4 py-3"><p className="text-xs font-medium text-gray-500">승진자격 점수</p><strong className="mt-1 block text-xl tabular-nums text-gray-950">{expectedSimulation.targetScore.toFixed(1)}점</strong></div><div className="min-w-36 rounded-lg bg-gray-50 px-4 py-3"><p className="text-xs font-medium text-gray-500">현재 점수</p><strong className="mt-1 block text-xl tabular-nums text-gray-950">{currentSimulation.currentScore.toFixed(1)}점</strong></div><div className="min-w-44 rounded-lg bg-blue-50 px-4 py-3"><p className="text-xs font-medium text-gray-500">시뮬레이션 가산</p><strong className="mt-1 block text-xl tabular-nums text-blue-600">{simulationBonus >= 0 ? '+' : ''}{simulationBonus.toFixed(1)}점</strong></div><div className={`min-w-48 rounded-lg px-4 py-3 ${expectedGap >= 0 ? 'bg-emerald-50' : 'bg-orange-50'}`}><p className="text-xs font-medium text-gray-500">최종 시뮬레이션 점수</p><strong className={`mt-1 block text-xl tabular-nums ${expectedGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{expectedSimulation.currentScore.toFixed(1)}점</strong></div></div><div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600"><strong className="text-gray-800">가산 근거</strong>{simulationBonusRows.length > 0 ? simulationBonusRows.map((item) => <span key={item.year} className="rounded-md border border-gray-200 bg-white px-2 py-1">{item.year}년 입력 {item.bonus >= 0 ? '+' : ''}{item.bonus.toFixed(1)}점</span>) : <span className="text-gray-400">추가 입력으로 반영된 가산점이 없습니다.</span>}</div></section>}
+
+        <section className="border-b border-gray-200 bg-slate-50 px-4 py-3"><button type="button" onClick={() => setPerformanceOpen((value) => !value)} className="flex w-full items-center justify-between text-left"><span className="flex items-center gap-2"><strong className="text-sm text-gray-900">성과</strong><span className="text-xs text-gray-400">평가기간별 성과 요약</span></span><DisclosureIcon open={performanceOpen} className="h-4 w-4 text-gray-500" /></button>{performanceOpen && <div className="mt-4"><RecentPerformanceSummary member={selectedMember} /></div>}</section>
 
         <div className="meeting-focus-content meeting-focus-content-expanded">
         <div className="meeting-focus-compose">

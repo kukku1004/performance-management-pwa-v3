@@ -148,19 +148,15 @@
 .meeting-focus-memos { display: flex; min-width: 0; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 
 .meeting-focus-score-grid {
-  display: grid;
-  width: 392px;
+  display: flex;
+  width: auto;
   flex-shrink: 0;
-  grid-template-columns: 84px minmax(0, 0.9fr) minmax(0, 1.3fr);
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
+  gap: 8px;
 }
 
-.meeting-focus-score-grid > div { min-width: 0; padding: 12px 14px; }
-.meeting-focus-score-grid > div + div { border-left: 1px solid #e2e8f0; }
-.meeting-focus-score-grid > .meeting-focus-score-final { margin: -1px; border: 1px solid; border-radius: 8px; }
+.meeting-focus-score-grid > div,
+.meeting-focus-score-grid > button { min-width: 96px; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.meeting-focus-score-grid > .meeting-focus-score-final { min-width: 190px; border: 1px solid; }
 .meeting-focus-score-final-met { border-color: #10b981 !important; }
 .meeting-focus-score-final-short { border-color: #f97316 !important; }
 .meeting-focus-score-grid p { color: #64748b; font-size: 12px; font-weight: 500; line-height: normal; }
