@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { TeamMember } from '../types'
+import type { EvaluationGrade, TeamMember } from '../types'
 import { useWorkspace } from '../state/WorkspaceContext'
-import { getMemberEvaluationHistory, getMemberProjectPerformance } from '../utils/growth'
+import { GRADE_POINTS, getMemberEvaluationHistory, getMemberProjectPerformance, mergeProjectHistoryForSimulation } from '../utils/growth'
 import Badge, { type BadgeTone } from './Badge'
 import DisclosureIcon from './DisclosureIcon'
 import EvaluationNoteButton from './EvaluationNoteButton'
@@ -9,6 +9,33 @@ import { useAppState } from '../state/AppContext'
 
 const GRADE_TONES: Record<string, BadgeTone> = {
   S: 'grade-s', A: 'grade-a', B: 'grade-b', C: 'grade-c', D: 'grade-d',
+}
+
+interface TrendPoint {
+  label: string
+  grade: EvaluationGrade
+}
+
+function TrendSparkline({ title, points }: { title: string; points: TrendPoint[] }) {
+  const width = 132
+  const height = 30
+  const padding = 3
+  const coordinates = points.map((point, index) => ({
+    ...point,
+    x: points.length === 1 ? width - padding : padding + (index * (width - padding * 2)) / (points.length - 1),
+    y: padding + ((5 - GRADE_POINTS[point.grade]) * (height - padding * 2)) / 4,
+  }))
+  const path = coordinates.map((point) => `${point.x},${point.y}`).join(' ')
+
+  return <div className="min-w-0 flex-1">
+    <p className="mb-1 text-[11px] font-medium text-gray-400">{title}</p>
+    {points.length === 0
+      ? <div className="flex h-[30px] items-center text-[11px] text-gray-300">데이터 없음</div>
+      : <svg viewBox={`0 0 ${width} ${height}`} className="h-[30px] w-[132px] max-w-full overflow-visible" role="img" aria-label={`${title}: ${points.map((point) => `${point.label} ${point.grade}`).join(', ')}`}>
+        {coordinates.length > 1 && <polyline points={path} fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />}
+        {coordinates.map((point, index) => <circle key={`${point.label}-${index}`} cx={point.x} cy={point.y} r={index === coordinates.length - 1 ? 3 : 2} fill={index === coordinates.length - 1 ? '#2563eb' : '#d1d5db'} />)}
+      </svg>}
+  </div>
 }
 
 function TaskRows({ tasks, memberName, onNoteSave }: { tasks: NonNullable<ReturnType<typeof getMemberProjectPerformance>>['majorTasks']; memberName: string; onNoteSave: (taskId: string, note: string) => void }) {
@@ -20,6 +47,13 @@ export default function RecentPerformanceSummary({ member }: { member: TeamMembe
   const { dispatch } = useAppState()
   const { workspace, activeTeam, activeProject, updateProjectState } = useWorkspace()
   const history = activeTeam ? getMemberEvaluationHistory(workspace, activeTeam.id, member.id) : []
+  const storedPerformanceHistory = activeTeam?.growthProfiles.find((profile) => profile.memberId === member.id)?.performanceHistory ?? []
+  const mergedPerformanceHistory = mergeProjectHistoryForSimulation(history, storedPerformanceHistory).sort((a, b) => a.year - b.year)
+  const performanceTrend = mergedPerformanceHistory.flatMap((record) => [
+    ...(record.firstHalf ? [{ label: `${record.year} 상반기`, grade: record.firstHalf }] : []),
+    ...(record.secondHalf ? [{ label: `${record.year} 하반기`, grade: record.secondHalf }] : []),
+  ])
+  const competencyTrend = mergedPerformanceHistory.flatMap((record) => record.competency ? [{ label: `${record.year}년`, grade: record.competency }] : [])
   const defaultProjectId = history.some((item) => item.projectId === activeProject?.id) ? activeProject?.id ?? '' : history[0]?.projectId ?? ''
   const [openProjectIds, setOpenProjectIds] = useState<string[]>(defaultProjectId ? [defaultProjectId] : [])
 
@@ -44,9 +78,19 @@ export default function RecentPerformanceSummary({ member }: { member: TeamMembe
     })
   }
 
-  if (history.length === 0) return <section className="pb-4"><h3 className="ui-section-title">성과</h3><p className="mt-2 text-sm text-gray-500">아직 평가 성과가 없습니다.</p></section>
+  if (history.length === 0) return <section className="space-y-2 pb-4">
+    {(performanceTrend.length > 0 || competencyTrend.length > 0) && <div className="flex max-w-[330px] gap-6 px-1 pb-1" aria-label="고과 추이">
+      <TrendSparkline title="상·하반기 성과 고과 추이" points={performanceTrend} />
+      <TrendSparkline title="연도별 역량 고과 추이" points={competencyTrend} />
+    </div>}
+    <p className="text-sm text-gray-500">아직 평가 성과가 없습니다.</p>
+  </section>
 
   return <section className="space-y-2 pb-4" aria-label="평가기간별 성과">
+    <div className="flex max-w-[330px] gap-6 px-1 pb-1" aria-label="고과 추이">
+      <TrendSparkline title="상·하반기 성과 고과 추이" points={performanceTrend} />
+      <TrendSparkline title="연도별 역량 고과 추이" points={competencyTrend} />
+    </div>
     {history.map((item) => {
       const open = openProjectIds.includes(item.projectId)
       const detail = getMemberProjectPerformance(workspace, item.projectId, member.id)
