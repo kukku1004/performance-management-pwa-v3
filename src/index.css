@@ -167,16 +167,23 @@
 
 .meeting-focus-workspace {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   min-height: calc(100vh - 13rem);
   overflow: hidden;
 }
 
+.meeting-focus-rail-two-rows { grid-row: 1 / span 2; }
+.meeting-focus-summary-row { grid-column: 5 / 8; grid-row: 1; padding: 24px 28px 12px; }
+.meeting-focus-document-row { grid-column: 5; grid-row: 2; }
+.meeting-focus-document-row + .ui-panel-splitter { grid-column: 6; grid-row: 2; }
+.meeting-focus-reference { grid-column: 7; grid-row: 2; }
+
 .meeting-focus-timeline { min-width: 0; overflow: visible; padding: 0 8px 96px; }
 .meeting-focus-calendar-divider { min-height: 100%; background: #e5e7eb; }
 .meeting-focus-history-sidebar { min-width: 0; overflow: visible; background: #fff; padding: 140px 0 96px; }
 .meeting-focus-history-count { display: flex; height: 28px; align-items: center; justify-content: flex-start; gap: 5px; color: #374151; }
-.meeting-focus-document { min-width: 0; overflow-y: auto; padding: 24px 28px 96px; }
+.meeting-focus-document { min-width: 0; overflow-y: auto; padding: 0 28px 96px; }
 .meeting-focus-reference { min-width: 0; overflow: hidden; background: #f9fafb; }
 .meeting-focus-content { min-width: 0; }
 .meeting-focus-content-expanded { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.1fr); gap: 28px; align-items: start; margin-top: 24px; }

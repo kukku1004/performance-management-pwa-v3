@@ -10,7 +10,7 @@ import { PanelToggleIcon } from './PanelControls'
 const PERFORMANCE_USABLE_MIN_WIDTH = 150
 const SIMULATION_AUTO_COLLAPSE_WIDTH = 360
 
-export default function MemberGrowthOverview({ member, collapsedContent, onPanelMinimizedChange, performanceOpen, hideSummary = false, removeTopSpacing = false, simulationOnRight = false, simulationTriggerContainerId, showPerformancePanel = true }: { member: TeamMember; compact?: boolean; collapsible?: boolean; collapsedContent?: ReactNode; onPanelMinimizedChange?: (bothMinimized: boolean) => void; performanceOpen?: boolean; hideSummary?: boolean; removeTopSpacing?: boolean; simulationOnRight?: boolean; simulationTriggerContainerId?: string; showPerformancePanel?: boolean }) {
+export default function MemberGrowthOverview({ member, collapsedContent, onPanelMinimizedChange, hideSummary = false, removeTopSpacing = false, simulationOnRight = false, simulationTriggerContainerId, showPerformancePanel = true }: { member: TeamMember; compact?: boolean; collapsible?: boolean; collapsedContent?: ReactNode; onPanelMinimizedChange?: (bothMinimized: boolean) => void; hideSummary?: boolean; removeTopSpacing?: boolean; simulationOnRight?: boolean; simulationTriggerContainerId?: string; showPerformancePanel?: boolean }) {
   const { workspace, activeTeam, saveGrowthProfile } = useWorkspace()
   const [noteInput, setNoteInput] = useState('')
   const [noteAdding, setNoteAdding] = useState(false)
@@ -27,7 +27,6 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
   const [profile, setProfile] = useState(storedProfile ?? getDefaultGrowthProfile(member.id))
 
   useEffect(() => setProfile(storedProfile ?? getDefaultGrowthProfile(member.id)), [member.id, storedProfile])
-  useEffect(() => { if (performanceOpen !== undefined) setPerformancePanelMinimized(!performanceOpen) }, [performanceOpen])
   useEffect(() => {
     if (!criteriaOpen) return
     const width = Math.min(1120, window.innerWidth - 32)

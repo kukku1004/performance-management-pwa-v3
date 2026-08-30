@@ -82,7 +82,7 @@ export default function MeetingNotesFocusPreview({
   const [noteInput, setNoteInput] = useState('')
   const [noteColorPicker, setNoteColorPicker] = useState<string | null>(null)
   const [growthOpen, setGrowthOpen] = useState(false)
-  const [performanceOpen, setPerformanceOpen] = useState(false)
+  const [referencePanelsMinimized, setReferencePanelsMinimized] = useState(true)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const layoutRef = useRef<HTMLDivElement>(null)
   const [documentWidth, setDocumentWidth] = useState(760)
@@ -97,7 +97,7 @@ export default function MeetingNotesFocusPreview({
 
   useEffect(() => {
     setSelectedNoteId(null)
-    setPerformanceOpen(false)
+    setReferencePanelsMinimized(true)
   }, [selectedMemberId])
 
   useEffect(() => {
@@ -167,7 +167,7 @@ export default function MeetingNotesFocusPreview({
       const calendarWidth = calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH
       const fixedWidth = calendarWidth + 1 + 12 + HISTORY_RAIL_WIDTH + PANEL_SPLITTER_WIDTH
       const maximum = Math.max(DOCUMENT_USABLE_MIN_WIDTH, available - fixedWidth - REFERENCE_USABLE_MIN_WIDTH)
-      setPerformanceOpen(available - fixedWidth - proposed >= REFERENCE_USABLE_MIN_WIDTH)
+      setReferencePanelsMinimized(available - fixedWidth - proposed < REFERENCE_USABLE_MIN_WIDTH)
       setDocumentWidth(Math.max(DOCUMENT_USABLE_MIN_WIDTH, Math.min(maximum, proposed)))
     }
     function up() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
@@ -183,17 +183,17 @@ export default function MeetingNotesFocusPreview({
       </button>)}
     </div>
 
-    <div ref={layoutRef} className={`meeting-focus-workspace ${performanceOpen ? '' : 'meeting-focus-workspace-expanded'}`} style={{ gridTemplateColumns: performanceOpen
+    <div ref={layoutRef} className={`meeting-focus-workspace ${referencePanelsMinimized ? 'meeting-focus-workspace-expanded' : ''}`} style={{ gridTemplateColumns: !referencePanelsMinimized
       ? `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(${DOCUMENT_USABLE_MIN_WIDTH}px, ${documentWidth}px) ${PANEL_SPLITTER_WIDTH}px minmax(${REFERENCE_USABLE_MIN_WIDTH}px, 1fr)`
       : `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(0, 1fr) ${PANEL_SPLITTER_WIDTH}px ${COLLAPSED_PANEL_WIDTH}px` }}>
-      <aside className="meeting-focus-timeline">
+      <aside className="meeting-focus-timeline meeting-focus-rail-two-rows">
         <MeetingCalendar notes={allNotes} members={members} selectedMemberId={selectedMemberId} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
       </aside>
 
-      <div className="meeting-focus-calendar-divider" aria-hidden="true" />
-      <span aria-hidden="true" />
+      <div className="meeting-focus-calendar-divider meeting-focus-rail-two-rows" aria-hidden="true" />
+      <span className="meeting-focus-rail-two-rows" aria-hidden="true" />
 
-      <aside className="meeting-focus-history-sidebar" aria-label="면담 기록 탐색">
+      <aside className="meeting-focus-history-sidebar meeting-focus-rail-two-rows" aria-label="면담 기록 탐색">
         <div className="meeting-focus-history-count" title={`면담 기록 ${sortedNotes.length}건`} aria-label={`면담 기록 ${sortedNotes.length}건`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg><span className="text-xs font-semibold tabular-nums">{sortedNotes.length}</span></div>
         <div className="meeting-focus-history-rail">
           {sortedNotes.length === 0 ? <p className="py-3 text-xs text-gray-400">기록 없음</p> : sortedNotes.map((note, index) => <button key={note.id} type="button" onClick={() => openMeetingNote(note)} aria-label={`${note.date} 면담일지 불러오기`} className={`meeting-focus-history-mark group ${selectedNoteId === note.id ? 'meeting-focus-history-mark-active' : ''}`} style={{ '--history-color': moodColor(note.mood) } as CSSProperties}>
@@ -203,8 +203,7 @@ export default function MeetingNotesFocusPreview({
         </div>
       </aside>
 
-      <main className="meeting-focus-document">
-        <section className="meeting-focus-summary">
+      <section className="meeting-focus-summary meeting-focus-summary-row">
           <div className="meeting-focus-profile">
             <div className="meeting-focus-member-title"><h2>{selectedMember.name}</h2><span>{selectedMember.level || '직급 미설정'} · {selectedMember.yearsOfService ?? '-'}년차</span></div>
             <div className="meeting-focus-memos">{personalNotes.map((note) => { const colors = { gray: 'bg-gray-100 text-gray-700', orange: 'bg-[#fdf4ee] text-[#e05221]', blue: 'bg-blue-50 text-blue-800', green: 'bg-green-50 text-green-800', violet: 'bg-violet-50 text-violet-800' }; const dots = { gray: 'bg-gray-400', orange: 'bg-[#e05221]', blue: 'bg-blue-500', green: 'bg-green-500', violet: 'bg-violet-500' }; return <span key={note.id} className={`relative inline-flex max-w-56 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${colors[note.color]}`}><button type="button" onClick={() => setNoteColorPicker((value) => value === note.id ? null : note.id)} title="메모 색상 변경" aria-label={`${note.content} 색상 변경`} className={`h-1.5 w-1.5 shrink-0 rounded-full ${dots[note.color]}`} /><span className="truncate">{note.content}</span><button type="button" onClick={() => savePersonalNotes(personalNotes.filter((item) => item.id !== note.id))} title="메모 삭제" aria-label={`${note.content} 삭제`} className="text-current opacity-70 hover:opacity-100">×</button>{noteColorPicker === note.id && <span className="absolute left-0 top-full z-50 mt-1 flex gap-1 rounded-md border border-gray-200 bg-white p-2 shadow-sm">{(Object.keys(dots) as Array<keyof typeof dots>).map((color) => <button key={color} type="button" onClick={() => { savePersonalNotes(personalNotes.map((item) => item.id === note.id ? { ...item, color } : item)); setNoteColorPicker(null) }} aria-label={`${color} 색상 지정`} className={`h-4 w-4 rounded-full ring-1 ring-black/10 ${dots[color]} ${note.color === color ? 'ring-2 ring-gray-950 ring-offset-1' : ''}`} />)}</span>}</span> })}{noteAdding ? <form onSubmit={addPersonalNote} className="flex items-center gap-1"><input autoFocus value={noteInput} onChange={(event) => setNoteInput(event.target.value)} onBlur={() => { if (!noteInput.trim()) setNoteAdding(false) }} className="ui-field ui-field-sm w-40" placeholder="팀원 메모" /><button type="submit" className="ui-button ui-button-secondary ui-button-sm">추가</button></form> : <button type="button" onClick={() => setNoteAdding(true)} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-800">+ 메모</button>}</div>
@@ -217,9 +216,9 @@ export default function MeetingNotesFocusPreview({
             </div>
             <div id="meeting-simulation-trigger" className="flex shrink-0 items-center" />
           </div>
-        </section>
+      </section>
 
-        <section className="border-b border-gray-200 bg-slate-50 px-4 py-3"><button type="button" onClick={() => setPerformanceOpen((value) => !value)} className="flex w-full items-center justify-between text-left"><span className="flex items-center gap-2"><strong className="text-sm text-gray-900">성과</strong><span className="text-xs text-gray-400">면담 영역 옆에서 평가기간별 성과를 확인합니다.</span></span><DisclosureIcon open={performanceOpen} className="h-4 w-4 text-gray-500" /></button></section>
+      <main className="meeting-focus-document meeting-focus-document-row">
 
         <div className="meeting-focus-content meeting-focus-content-expanded">
         <div className="meeting-focus-compose">
@@ -246,7 +245,7 @@ export default function MeetingNotesFocusPreview({
         </div>
       </main>
       <PanelSplitter aria-label="면담일지와 성과 영역 너비 조절" onPointerDown={startResize} />
-      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight simulationTriggerContainerId="meeting-simulation-trigger" performanceOpen={performanceOpen} onPanelMinimizedChange={(minimized) => setPerformanceOpen(!minimized)} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
+      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight simulationTriggerContainerId="meeting-simulation-trigger" onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
     {printPreviewOpen && <MeetingPrintPreview member={selectedMember} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
   </div>
