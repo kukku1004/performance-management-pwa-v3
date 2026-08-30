@@ -64,6 +64,7 @@ export default function GoogleDriveDialog({
   const [error, setError] = useState('')
   const [resetOpen, setResetOpen] = useState(false)
   const [backupDirectory, setBackupDirectory] = useState<BackupDirectoryHandle | null>(null)
+  const [localFormats, setLocalFormats] = useState({ json: true, excel: true })
   const restoreInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -170,7 +171,7 @@ export default function GoogleDriveDialog({
     try {
       const directory = await picker()
       setBackupDirectory(directory)
-      setMessage(`저장 위치: ${directory.name}`)
+      setMessage('')
       setError('')
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return
@@ -178,11 +179,11 @@ export default function GoogleDriveDialog({
     }
   }
 
-  async function saveLocalBackup(kind: 'json' | 'excel') {
+  async function saveLocalBackup(kind: 'json' | 'excel', quiet = false) {
     const safePeriodName = sanitizePeriodName(periodName)
     if (!safePeriodName) {
       setError('평가기간명을 입력하세요.')
-      return
+      return false
     }
     const filename = kind === 'json' ? `${safePeriodName}_성장관리_data.json` : `${safePeriodName}_성과관리.xlsx`
     const blob = kind === 'json'
@@ -190,19 +191,33 @@ export default function GoogleDriveDialog({
       : workbookToBlob(createFullBackupWorkbook(state, periodName.trim()))
     if (!backupDirectory) {
       downloadBlob(blob, filename)
-      setMessage(`${filename} 파일을 기본 다운로드 폴더에 저장했습니다.`)
-      return
+      if (!quiet) setMessage(`${filename} 파일을 기본 다운로드 폴더에 저장했습니다.`)
+      return true
     }
     try {
       const file = await backupDirectory.getFileHandle(filename, { create: true })
       const writable = await file.createWritable()
       await writable.write(blob)
       await writable.close()
-      setMessage(`${backupDirectory.name}/${filename} 저장 완료`)
+      if (!quiet) setMessage(`${backupDirectory.name}/${filename} 저장 완료`)
       setError('')
+      return true
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '백업 파일을 저장하지 못했습니다.')
+      return false
     }
+  }
+
+  async function saveSelectedLocalBackups() {
+    const selected = (Object.entries(localFormats) as Array<['json' | 'excel', boolean]>).filter(([, checked]) => checked).map(([kind]) => kind)
+    if (selected.length === 0) {
+      setError('백업할 파일 형식을 하나 이상 선택하세요.')
+      return
+    }
+    setError('')
+    const results = await Promise.all(selected.map((kind) => saveLocalBackup(kind, true)))
+    const saved = selected.filter((_, index) => results[index])
+    if (saved.length > 0) setMessage(`${saved.map((kind) => kind === 'json' ? 'JSON' : 'Excel').join(' · ')} 백업을 완료했습니다.`)
   }
 
   return (
@@ -237,8 +252,8 @@ export default function GoogleDriveDialog({
 
         {activeTab === 'local' ? (
           <div className="mx-auto mt-5 w-full max-w-4xl space-y-4 px-1">
-            <section className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div><h4 className="ui-section-title">저장 위치</h4><p className="ui-section-description">{backupDirectory ? backupDirectory.name : '지정하지 않으면 브라우저 기본 다운로드 폴더에 저장됩니다.'}</p></div><button type="button" onClick={() => { void chooseBackupDirectory() }} className="ui-button ui-button-secondary">위치 지정</button></section>
-            <section className="space-y-4 rounded-lg border border-gray-200 p-4"><div><h4 className="ui-section-title">지금 데이터 백업</h4><p className="ui-section-description">현재 계정에 저장된 모든 팀·프로젝트 데이터를 파일로 내보냅니다.</p></div><div><label htmlFor="local-period-name" className="ui-label">평가기간명</label><input id="local-period-name" value={periodName} onChange={(event) => onPeriodNameChange(event.target.value)} className="ui-field" /></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => { void saveLocalBackup('json') }} className="ui-button ui-button-primary">로컬 파일로 백업 (JSON)</button><button type="button" onClick={() => { void saveLocalBackup('excel') }} className="ui-button ui-button-secondary">엑셀로 백업</button></div><p className="text-xs leading-5 text-gray-500">JSON은 그대로 복원할 수 있는 원본이고, Excel은 사람이 보기 좋은 사본입니다.</p></section>
+            <section className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="min-w-0"><h4 className="ui-section-title">저장 위치</h4>{backupDirectory ? <p className="mt-1 truncate text-sm font-medium text-success" title={`브라우저 보안상 상위 폴더 경로는 표시되지 않습니다. 선택 폴더: ${backupDirectory.name}`}><span className="text-gray-400">내 컴퓨터 › … › </span>{backupDirectory.name}</p> : <p className="ui-section-description">지정하지 않으면 브라우저 기본 다운로드 폴더에 저장됩니다.</p>}</div><button type="button" onClick={() => { void chooseBackupDirectory() }} className="ui-button ui-button-secondary">위치 지정</button></section>
+            <section className="space-y-4 rounded-lg border border-gray-200 p-4"><div><h4 className="ui-section-title">지금 데이터 백업</h4><p className="ui-section-description">현재 계정에 저장된 모든 팀·프로젝트 데이터를 선택한 형식으로 함께 내보냅니다.</p></div><div><label htmlFor="local-period-name" className="ui-label">평가기간명</label><input id="local-period-name" value={periodName} onChange={(event) => onPeriodNameChange(event.target.value)} className="ui-field" /></div><fieldset><legend className="ui-label">백업 파일</legend><div className="mt-2 flex flex-wrap gap-x-6 gap-y-2"><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-900"><input type="checkbox" checked={localFormats.json} onChange={(event) => setLocalFormats((current) => ({ ...current, json: event.target.checked }))} className="h-4 w-4 accent-[#d4772c]" />JSON <span className="text-xs text-gray-500">복원용 원본</span></label><label className="flex cursor-pointer items-center gap-2 text-sm text-gray-900"><input type="checkbox" checked={localFormats.excel} onChange={(event) => setLocalFormats((current) => ({ ...current, excel: event.target.checked }))} className="h-4 w-4 accent-[#d4772c]" />Excel <span className="text-xs text-gray-500">확인·보관용</span></label></div></fieldset><button type="button" onClick={() => { void saveSelectedLocalBackups() }} disabled={busy || (!localFormats.json && !localFormats.excel)} className="ui-button ui-button-primary">선택 항목 백업</button></section>
             <section className="space-y-3 rounded-lg border border-gray-200 p-4"><div><h4 className="ui-section-title">백업 파일 복원</h4><p className="ui-section-description">이 앱에서 내려받은 JSON 백업으로 현재 프로젝트를 복원합니다.</p></div><input ref={restoreInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => { void handleLocalRestore(event.target.files?.[0]); event.target.value = '' }} /><button type="button" onClick={() => restoreInputRef.current?.click()} disabled={busy} className="ui-button ui-button-secondary">JSON 백업 선택</button></section>
             <div className="rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-600">현재 데이터: 과제 {state.tasks.length}개 · 팀원 {state.members.length}명 · 피어리뷰 {state.peerReviews.length}건</div>
           </div>
