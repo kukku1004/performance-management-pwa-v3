@@ -9,6 +9,7 @@ import { PanelToggleIcon } from './PanelControls'
 
 const PERFORMANCE_USABLE_MIN_WIDTH = 150
 const SIMULATION_AUTO_COLLAPSE_WIDTH = 360
+const SIMULATION_POPUP_TOP = 142
 
 export default function MemberGrowthOverview({ member, collapsedContent, onPanelMinimizedChange, hideSummary = false, removeTopSpacing = false, simulationOnRight = false, simulationTriggerContainerId, showPerformancePanel = true }: { member: TeamMember; compact?: boolean; collapsible?: boolean; collapsedContent?: ReactNode; onPanelMinimizedChange?: (bothMinimized: boolean) => void; hideSummary?: boolean; removeTopSpacing?: boolean; simulationOnRight?: boolean; simulationTriggerContainerId?: string; showPerformancePanel?: boolean }) {
   const { workspace, activeTeam, saveGrowthProfile } = useWorkspace()
@@ -21,15 +22,14 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
   const panelRef = useRef<HTMLDivElement>(null)
   const performancePanelRef = useRef<HTMLDivElement>(null)
   const manualExpandUntilRef = useRef(0)
-  const [simulationPopupPosition, setSimulationPopupPosition] = useState(() => ({ x: Math.max(24, (window.innerWidth - 560) / 2), y: 24 }))
+  const [simulationPopupPosition, setSimulationPopupPosition] = useState(() => ({ x: Math.max(24, window.innerWidth - 560 - 24), y: SIMULATION_POPUP_TOP }))
   const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === member.id)
   const [profile, setProfile] = useState(storedProfile ?? getDefaultGrowthProfile(member.id))
 
   useEffect(() => setProfile(storedProfile ?? getDefaultGrowthProfile(member.id)), [member.id, storedProfile])
   useEffect(() => {
-    if (!criteriaOpen) return
-    const width = Math.min(1240, window.innerWidth - 48)
-    setSimulationPopupPosition((position) => ({ ...position, x: Math.max(24, (window.innerWidth - width) / 2), y: 16 }))
+    const width = Math.min(criteriaOpen ? 1240 : 560, window.innerWidth - 48)
+    setSimulationPopupPosition({ x: Math.max(24, window.innerWidth - width - 24), y: Math.min(SIMULATION_POPUP_TOP, Math.max(16, window.innerHeight - 160)) })
   }, [criteriaOpen])
   useEffect(() => onPanelMinimizedChange?.(collapsedContent ? performancePanelMinimized : simulationPanelMinimized && performancePanelMinimized), [collapsedContent, onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
   useEffect(() => {
