@@ -3,7 +3,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { useAppState } from '../state/AppContext'
 import type { MeetingNote, TeamMember } from '../types'
 import { useWorkspace } from '../state/WorkspaceContext'
-import { getMemberEvaluationHistory, getRecentMemberPerformance } from '../utils/growth'
+import { getMemberEvaluationHistory } from '../utils/growth'
+import { buildMemberInsights } from '../utils/memberInsights'
 import ConfirmDialog from './ConfirmDialog'
 import MeetingNotesFocusPreview from './MeetingNotesFocusPreview'
 
@@ -33,15 +34,9 @@ export default function MeetingNotes() {
 
   const selectedMember: TeamMember | undefined = members.find((member) => member.id === selectedMemberId)
   const notesForMember = meetingNotes.filter((note) => note.memberId === selectedMemberId).sort((a, b) => b.date.localeCompare(a.date))
-  const selectedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId)
-  const selectedPerformance = activeTeam ? getRecentMemberPerformance(workspace, activeTeam.id, selectedMemberId) : null
-  const meetingInsights = [
-    ...(selectedProfile?.personalNotes ?? []).map((note) => typeof note === 'string' ? note : note.content),
-    ...(selectedPerformance ? [
-      `${selectedPerformance.latest.grade} 고과에서 본인이 가장 의미 있게 느낀 결과와 다음 목표를 확인해 보세요.`,
-      selectedPerformance.majorTasks.length > 0 ? `${selectedPerformance.majorTasks.map((task) => task.name).join(', ')}에서 맡은 역할과 지원이 필요한 부분을 확인해 보세요.` : '최근 평가기간의 주요 업무와 성과 근거를 확인해 보세요.',
-    ] : []),
-  ]
+  const meetingInsights = activeTeam && selectedMember
+    ? buildMemberInsights(workspace, activeTeam.id, selectedMember, notesForMember)
+    : []
 
   function getMemberGrade(memberId: string) {
     const currentYear = new Date().getFullYear()

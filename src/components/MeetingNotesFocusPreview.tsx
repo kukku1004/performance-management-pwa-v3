@@ -8,6 +8,8 @@ import MeetingCalendar from './MeetingCalendar'
 import { COLLAPSED_PANEL_WIDTH, PANEL_SPLITTER_WIDTH, PanelSplitter } from './PanelControls'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory } from '../utils/growth'
+import type { MemberInsight } from '../utils/memberInsights'
+import InsightEvidenceDialog from './InsightEvidenceDialog'
 
 interface MeetingNotesFocusPreviewProps {
   members: TeamMember[]
@@ -16,7 +18,7 @@ interface MeetingNotesFocusPreviewProps {
   onSelectMember: (memberId: string) => void
   notes: MeetingNote[]
   allNotes: MeetingNote[]
-  insights: string[]
+  insights: MemberInsight[]
   newDate: string
   newComment: string
   newMood: string
@@ -72,6 +74,7 @@ export default function MeetingNotesFocusPreview({
 }: MeetingNotesFocusPreviewProps) {
   const { workspace, activeTeam, saveGrowthProfile } = useWorkspace()
   const [insightsOpen, setInsightsOpen] = useState(true)
+  const [selectedInsight, setSelectedInsight] = useState<MemberInsight | null>(null)
   const [historyOpen, setHistoryOpen] = useState(true)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(false)
@@ -93,6 +96,7 @@ export default function MeetingNotesFocusPreview({
 
   useEffect(() => {
     setSelectedNoteId(null)
+    setSelectedInsight(null)
   }, [selectedMemberId])
 
   useEffect(() => {
@@ -223,9 +227,9 @@ export default function MeetingNotesFocusPreview({
 
         <div className="meeting-focus-context">
 
-        {insights.length > 0 && <section className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4">
-          <button type="button" onClick={() => setInsightsOpen((value) => !value)} className="flex w-full items-center justify-between py-3 text-left"><h3 className="text-sm font-semibold text-amber-950">면담 인사이트</h3><DisclosureIcon open={insightsOpen} className="h-4 w-4 text-amber-700" /></button>
-          {insightsOpen && <ul className="space-y-2 pb-4 text-sm leading-5 text-amber-950/80">{insights.map((insight) => <li key={insight} className="flex gap-2"><span className="text-orange-600">•</span><span>{insight}</span></li>)}</ul>}
+        {insights.length > 0 && <section className="mt-5 overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <button type="button" onClick={() => setInsightsOpen((value) => !value)} className="flex w-full items-center justify-between px-4 py-3 text-left"><span><h3 className="text-sm font-semibold text-gray-950">면담 인사이트</h3><span className="mt-0.5 block text-xs text-gray-500">핵심만 보고, 근거는 필요할 때 확인하세요.</span></span><DisclosureIcon open={insightsOpen} className="h-4 w-4 text-gray-500" /></button>
+          {insightsOpen && <div className="divide-y divide-gray-100 border-t border-gray-100">{insights.map((insight) => <article key={insight.id} className="px-4 py-4"><div className="flex items-start gap-3"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${insight.tone === 'positive' ? 'bg-emerald-500' : insight.tone === 'attention' ? 'bg-orange-500' : 'bg-gray-400'}`} /><div className="min-w-0 flex-1"><h4 className="text-sm font-semibold leading-5 text-gray-950">{insight.title}</h4><p className="mt-1 text-xs leading-5 text-gray-500">{insight.summary}</p><div className="mt-3 rounded-md bg-gray-50 px-3 py-2"><p className="text-[11px] font-semibold text-gray-500">이번 면담 질문</p><p className="mt-1 text-sm leading-5 text-gray-800">{insight.question}</p></div><button type="button" onClick={() => setSelectedInsight(insight)} className="mt-2 text-xs font-semibold text-accent hover:underline">근거 보기</button></div></div></article>)}</div>}
         </section>}
 
         <section className="mt-7">
@@ -239,5 +243,6 @@ export default function MeetingNotesFocusPreview({
       <PanelSplitter aria-label="면담일지와 성과·성장 영역 너비 조절" onPointerDown={startResize} />
       <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
+    <InsightEvidenceDialog insight={selectedInsight} onClose={() => setSelectedInsight(null)} />
   </div>
 }
