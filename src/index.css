@@ -160,6 +160,9 @@
 
 .meeting-focus-score-grid > div { min-width: 0; padding: 12px 14px; }
 .meeting-focus-score-grid > div + div { border-left: 1px solid #e2e8f0; }
+.meeting-focus-score-grid > .meeting-focus-score-final { margin: -1px; border: 1px solid; border-radius: 8px; }
+.meeting-focus-score-final-met { border-color: #10b981 !important; }
+.meeting-focus-score-final-short { border-color: #f97316 !important; }
 .meeting-focus-score-grid p { color: #64748b; font-size: 12px; font-weight: 500; line-height: normal; }
 .meeting-focus-score-grid strong { display: block; margin-top: 6px; color: #1e293b; font-size: 20px; line-height: normal; font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .meeting-focus-score-result { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
