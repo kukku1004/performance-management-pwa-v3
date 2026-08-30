@@ -35,7 +35,7 @@ function WorkspaceRouter() {
 
 function ProjectApp() {
   const { state, dispatch } = useAppState()
-  const { activeProject, activeTeam, resetWorkspace } = useWorkspace()
+  const { workspace, activeProject, activeTeam, resetWorkspace } = useWorkspace()
   const [activeTab, setActiveTab] = useState<TabKey>('tasks')
   const [dataManagementOpen, setDataManagementOpen] = useState(false)
   const [quickStartOpen, setQuickStartOpen] = useState(() => state.tasks.length === 0 && state.members.length === 0)
@@ -56,7 +56,7 @@ function ProjectApp() {
         {activeTab === 'results' && <EvaluationResults />}
         {activeTab === 'notes' && <MeetingNotes />}
       </main></CriteriaWorkspaceProvider>
-      <GoogleDriveDialog open={dataManagementOpen} state={state} periodName={periodName} onPeriodNameChange={setPeriodName} onRestore={(restoredState) => dispatch({ type: 'LOAD_STATE', payload: restoredState })} onResetWorkspace={resetWorkspace} teamName={activeTeam?.name} projectId={activeProject?.id ?? ''} periodLabel={activeProject ? formatEvaluationPeriod(activeProject.period) : periodName} onClose={() => setDataManagementOpen(false)} />
+      <GoogleDriveDialog open={dataManagementOpen} state={state} workspace={workspace} periodName={periodName} onPeriodNameChange={setPeriodName} onRestore={(restoredState) => dispatch({ type: 'LOAD_STATE', payload: restoredState })} onResetWorkspace={resetWorkspace} teamName={activeTeam?.name} projectId={activeProject?.id ?? ''} periodLabel={activeProject ? formatEvaluationPeriod(activeProject.period) : periodName} onClose={() => setDataManagementOpen(false)} />
       <ProjectSetupStart
         open={quickStartOpen}
         onClose={() => setQuickStartOpen(false)}

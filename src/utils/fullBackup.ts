@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { AppState } from '../types'
+import type { AppState, WorkspaceState } from '../types'
 import {
   IMPORTANCE_WEIGHT,
   PERFORMANCE_SCORE,
@@ -12,6 +12,7 @@ import {
   getContribution,
 } from './calculations'
 import { migrateAppState } from './migrate'
+import { formatEvaluationPeriod } from './workspace'
 
 export const BACKUP_SCHEMA_VERSION = 1
 
@@ -251,8 +252,24 @@ export function workbookToBlob(workbook: XLSX.WorkBook): Blob {
   return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
 
-export function backupToJsonBlob(backup: FullBackupEnvelope): Blob {
+export function backupToJsonBlob(backup: unknown): Blob {
   return new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+}
+
+export function createWorkspaceBackupEnvelope(workspace: WorkspaceState) {
+  return { schemaVersion: 1, backupType: 'workspace', exportedAt: new Date().toISOString(), workspace }
+}
+
+export function createWorkspaceBackupWorkbook(workspace: WorkspaceState): XLSX.WorkBook {
+  const workbook = XLSX.utils.book_new()
+  const teamNameById = new Map(workspace.teams.map((team) => [team.id, team.name]))
+  appendSheet(workbook, '01_팀', [['팀명', '팀원 수', '프로젝트 수'], ...workspace.teams.map((team) => [team.name, team.members.length, workspace.projects.filter((project) => project.teamId === team.id).length])], [24, 12, 14])
+  appendSheet(workbook, '02_프로젝트', [['팀', '평가기간', '과제 수', '팀원 수', '수정일'], ...workspace.projects.map((project) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), project.appState.tasks.length, project.appState.members.length, project.updatedAt])], [24, 18, 12, 12, 24])
+  appendSheet(workbook, '03_팀원', [['팀', '평가기간', '이름', '직급', '직책', '연차', '역할'], ...workspace.projects.flatMap((project) => project.appState.members.map((member) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), member.name, member.level || '-', member.position || '-', member.yearsOfService ?? '-', member.role || '-']))], [20, 18, 14, 10, 10, 8, 18])
+  appendSheet(workbook, '04_과제', [['팀', '평가기간', '과제명', '중요도', '성과등급', '업무량', '목표', '성과'], ...workspace.projects.flatMap((project) => project.appState.tasks.map((task) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), task.name, task.importance, task.performanceGrade, task.workload, task.objective || '-', task.achievement || '-']))], [20, 18, 24, 10, 10, 10, 30, 30])
+  appendSheet(workbook, '05_성과결과', [['팀', '평가기간', '팀원', '성과점수', '누적점수', '최종 고과'], ...workspace.projects.flatMap((project) => calcMemberResults(project.appState.members, project.appState.tasks, project.appState.contributions, project.appState.criteria, project.appState.peerReviews).map((result) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), result.member.name, Number(result.performanceScore.toFixed(1)), Number(result.cumulativeScore.toFixed(1)), result.grade]))], [20, 18, 14, 12, 12, 12])
+  appendSheet(workbook, '06_면담기록', [['팀', '평가기간', '팀원', '면담일', '내용'], ...workspace.projects.flatMap((project) => project.appState.meetingNotes.map((note) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), project.appState.members.find((member) => member.id === note.memberId)?.name ?? '-', note.date, note.comment]))], [20, 18, 14, 14, 48])
+  return workbook
 }
 
 export function sanitizePeriodName(name: string): string {
