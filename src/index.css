@@ -183,6 +183,8 @@
 .promotion-criteria-embedded > div:not(:first-child) > p { margin-top: 4px; font-size: 12px; line-height: 1.45; }
 .promotion-criteria-embedded .py-3 { padding-top: 8px; padding-bottom: 8px; }
 .promotion-criteria-embedded .mt-3 { margin-top: 8px; }
+.promotion-criteria-embedded .min-w-\[650px\] { min-width: 0 !important; }
+.promotion-criteria-embedded .min-w-\[650px\] > div { grid-template-columns: 56px repeat(5, minmax(44px, 1fr)) minmax(130px, 1.5fr) !important; }
 
 @media (max-height: 900px) {
   .promotion-criteria-embedded { zoom: .86; width: 116.3%; height: 116.3%; }
