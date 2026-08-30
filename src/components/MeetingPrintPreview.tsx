@@ -4,33 +4,46 @@ import type { MemberEvaluationHistory } from '../utils/growth'
 import type { MemberInsight } from '../utils/memberInsights'
 import ModalCloseButton from './ModalCloseButton'
 
-type PrintOption = 'profile' | 'performance' | 'insights' | 'questions' | 'lastMeeting' | 'growth' | 'draft' | 'memo' | 'followUp'
+type PrintOption = 'profile' | 'performance' | 'insights' | 'questions' | 'lastMeeting' | 'growth' | 'draft' | 'memo'
 
 const OPTION_LABELS: Array<[PrintOption, string]> = [
   ['profile', '팀원 기본정보'], ['performance', '현재 성과 요약'], ['insights', '핵심 인사이트'], ['questions', '추천 면담 질문'],
-  ['lastMeeting', '지난 면담 요약'], ['growth', '육성 포인트'], ['draft', '작성 중인 면담 내용'], ['memo', '빈 메모 공간'], ['followUp', '후속 확인사항 작성란'],
+  ['lastMeeting', '지난 면담 요약'], ['growth', '육성 포인트'], ['draft', '작성 중인 면담 내용'], ['memo', '면담 내용 입력란'],
 ]
 
-const DEFAULT_OPTIONS: Record<PrintOption, boolean> = { profile: true, performance: true, insights: true, questions: true, lastMeeting: true, growth: false, draft: false, memo: true, followUp: true }
+const DEFAULT_OPTIONS: Record<PrintOption, boolean> = { profile: true, performance: true, insights: true, questions: true, lastMeeting: true, growth: false, draft: false, memo: true }
 
 function escapeHtml(value: unknown) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') }
 
 export default function MeetingPrintPreview({ member, history, insights, latestNote, draft, growthPoints, onClose }: { member: TeamMember; history: MemberEvaluationHistory[]; insights: MemberInsight[]; latestNote: MeetingNote | null; draft: string; growthPoints: { strength: string; improvement: string; challenge: string; careerGoal: string }; onClose: () => void }) {
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
+  const [extraPages, setExtraPages] = useState(0)
   const latest = history[0]
   const previous = history[1]
   const toggle = (key: PrintOption) => setOptions((current) => ({ ...current, [key]: !current[key] }))
   const growthRows = [['강점', growthPoints.strength], ['보완 필요', growthPoints.improvement], ['다음 도전 경험', growthPoints.challenge], ['Career Goal', growthPoints.careerGoal]].filter(([, value]) => value.trim())
 
-  function bodyHtml() {
-    return `${options.profile ? `<header><div><p class="eyebrow">1:1 면담 준비지</p><h1>${escapeHtml(member.name)}</h1><p>${escapeHtml(member.level || '직급 미설정')} · ${member.yearsOfService ?? '-'}년차</p></div><p>면담일 __________________</p></header>` : ''}
+  function pageHeader(page: number, totalPages: number) {
+    return `<header><div><p class="eyebrow">1:1 면담 준비지</p><h1>${escapeHtml(member.name)}</h1><p>${escapeHtml(member.level || '직급 미설정')} · ${member.yearsOfService ?? '-'}년차</p></div><p>면담일 __________________</p></header>${totalPages > 1 ? `<span class="page-number">${page} / ${totalPages}</span>` : ''}`
+  }
+
+  function firstPageHtml(totalPages: number) {
+    return `<div class="print-page">${options.profile ? pageHeader(1, totalPages) : totalPages > 1 ? `<span class="page-number">1 / ${totalPages}</span>` : ''}
     ${options.performance ? `<section><h2>현재 상황</h2><div class="summary"><strong>${latest ? `${escapeHtml(latest.label)} · ${latest.score.toFixed(1)}점 · ${latest.grade}` : '성과 데이터 없음'}</strong>${latest && previous ? `<span>직전 대비 ${(latest.score - previous.score) >= 0 ? '+' : ''}${(latest.score - previous.score).toFixed(1)}점</span>` : ''}</div></section>` : ''}
     ${options.insights ? `<section><h2>핵심 인사이트</h2>${insights.map((item, index) => `<div class="insight"><strong>${index + 1}. ${escapeHtml(item.title)}</strong>${options.questions ? `<p>질문 · ${escapeHtml(item.question)}</p>` : ''}</div>`).join('')}</section>` : options.questions ? `<section><h2>추천 면담 질문</h2>${insights.map((item) => `<p class="line">• ${escapeHtml(item.question)}</p>`).join('')}</section>` : ''}
     ${options.lastMeeting ? `<section><h2>지난 면담 요약</h2><p class="text">${latestNote ? escapeHtml(latestNote.comment) : '지난 면담 기록이 없습니다.'}</p></section>` : ''}
-    ${options.growth ? `<section><h2>육성 포인트</h2>${growthRows.length ? growthRows.map(([label, value]) => `<div class="row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`).join('') : '<p class="muted">작성된 육성 포인트가 없습니다.</p>'}</section>` : ''}
+    ${options.growth ? `<section><h2 class="growth-title">육성 포인트 <span>강점 · 보완 필요 · 다음 경험 · Career Goal</span></h2>${growthRows.length ? `<div class="growth-content">${growthRows.map(([label, value]) => `<div class="row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`).join('')}</div>` : ''}</section>` : ''}
     ${options.draft ? `<section><h2>작성 중인 면담 내용</h2><p class="text">${draft.trim() ? escapeHtml(draft) : '작성 중인 내용이 없습니다.'}</p></section>` : ''}
-    ${options.memo ? '<section><h2>면담 메모</h2><div class="writing-lines"></div></section>' : ''}
-    ${options.followUp ? '<section><h2>후속 확인사항</h2><div class="follow">내용 ____________________________________ 확인일 ______________</div><div class="follow">내용 ____________________________________ 확인일 ______________</div></section>' : ''}`
+    ${options.memo ? '<section class="memo-section"><h2>면담 내용</h2><div class="writing-lines"></div></section>' : ''}</div>`
+  }
+
+  function blankPageHtml(page: number, totalPages: number) {
+    return `<div class="print-page blank-page">${pageHeader(page, totalPages)}<section class="memo-section"><h2>면담 내용</h2><div class="writing-lines blank-lines"></div></section></div>`
+  }
+
+  function pagesHtml() {
+    const totalPages = 1 + extraPages
+    return firstPageHtml(totalPages) + Array.from({ length: extraPages }, (_, index) => blankPageHtml(index + 2, totalPages)).join('')
   }
 
   function print() {
@@ -40,15 +53,15 @@ export default function MeetingPrintPreview({ member, history, insights, latestN
     const doc = frame.contentDocument
     if (!doc) { frame.remove(); return }
     doc.open()
-    doc.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapeHtml(member.name)} 면담 준비지</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{margin:0;color:#111827;font:11px/1.55 Arial,"Apple SD Gothic Neo",sans-serif}header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111827;padding-bottom:10px}h1{margin:2px 0;font-size:22px}.eyebrow{font-size:10px;font-weight:700;color:#ea580c}section{margin-top:14px}h2{margin:0 0 7px;border-bottom:1px solid #d1d5db;padding-bottom:4px;font-size:12px}.summary{display:flex;justify-content:space-between}.insight{padding:5px 0}.insight p{margin:2px 0 0;color:#4b5563}.line,.text,.muted{margin:4px 0;white-space:pre-wrap}.muted{color:#9ca3af}.row{display:grid;grid-template-columns:110px 1fr;border-bottom:1px solid #e5e7eb;padding:5px}.writing-lines{height:92px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 22px,#e5e7eb 23px)}.follow{border-bottom:1px solid #d1d5db;padding:7px 0}</style></head><body>${bodyHtml()}</body></html>`)
+    doc.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapeHtml(member.name)} 면담 준비지</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{margin:0;color:#111827;font:11px/1.55 Arial,"Apple SD Gothic Neo",sans-serif}.print-page{position:relative;min-height:269mm;page-break-after:always}.print-page:last-child{page-break-after:auto}header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111827;padding-bottom:10px}h1{margin:2px 0;font-size:22px}.eyebrow{font-size:10px;font-weight:700;color:#ea580c}.page-number{position:absolute;right:0;bottom:0;color:#6b7280;font-size:10px}section{margin-top:14px}h2{margin:0 0 7px;border-bottom:1px solid #d1d5db;padding-bottom:4px;font-size:12px}.growth-title span{margin-left:8px;color:#9ca3af;font-size:10px;font-weight:400}.growth-content{margin-top:8px}.summary{display:flex;justify-content:space-between}.insight{padding:5px 0}.insight p{margin:2px 0 0;color:#4b5563}.line,.text{margin:4px 0;white-space:pre-wrap}.row{display:grid;grid-template-columns:110px 1fr;border-bottom:1px solid #e5e7eb;padding:5px}.memo-section{margin-top:18px}.writing-lines{height:180px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 24px,#d1d5db 25px)}.blank-lines{height:205mm}</style></head><body>${pagesHtml()}</body></html>`)
     doc.close()
     window.setTimeout(() => { frame.contentWindow?.focus(); frame.contentWindow?.print(); window.setTimeout(() => frame.remove(), 1000) }, 80)
   }
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"><section role="dialog" aria-modal="true" aria-labelledby="meeting-print-title" className="flex max-h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
     <header className="flex items-center justify-between border-b border-gray-200 px-5 py-4"><div><h2 id="meeting-print-title" className="text-lg font-semibold text-gray-950">면담용지 미리보기</h2><p className="mt-1 text-sm text-gray-500">출력할 항목만 선택하세요.</p></div><ModalCloseButton onClick={onClose} label="면담용지 미리보기 닫기" /></header>
-    <div className="grid min-h-0 flex-1 lg:grid-cols-[240px_minmax(0,1fr)]"><aside className="overflow-y-auto border-r border-gray-200 bg-gray-50 p-4"><p className="text-xs font-semibold text-gray-500">출력 항목</p><div className="mt-3 space-y-1">{OPTION_LABELS.map(([key, label]) => <label key={key} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-white"><input type="checkbox" checked={options[key]} onChange={() => toggle(key)} className="h-4 w-4 accent-orange-600" />{label}</label>)}</div></aside>
-      <main className="overflow-auto bg-gray-200 p-5"><article className="meeting-print-sheet mx-auto min-h-[880px] w-full max-w-[680px] bg-white px-10 py-9 text-[11px] leading-5 text-gray-900 shadow-sm" dangerouslySetInnerHTML={{ __html: `<style>.meeting-print-sheet header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111827;padding-bottom:10px}.meeting-print-sheet h1{margin:2px 0;font-size:22px;font-weight:700}.meeting-print-sheet .eyebrow{font-size:10px;font-weight:700;color:#ea580c}.meeting-print-sheet section{margin-top:14px}.meeting-print-sheet h2{margin:0 0 7px;border-bottom:1px solid #d1d5db;padding-bottom:4px;font-size:12px;font-weight:700}.meeting-print-sheet .summary{display:flex;justify-content:space-between}.meeting-print-sheet .insight{padding:5px 0}.meeting-print-sheet .insight p{margin:2px 0 0;color:#4b5563}.meeting-print-sheet .line,.meeting-print-sheet .text,.meeting-print-sheet .muted{margin:4px 0;white-space:pre-wrap}.meeting-print-sheet .muted{color:#9ca3af}.meeting-print-sheet .row{display:grid;grid-template-columns:110px 1fr;border-bottom:1px solid #e5e7eb;padding:5px}.meeting-print-sheet .writing-lines{height:92px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 22px,#e5e7eb 23px)}.meeting-print-sheet .follow{border-bottom:1px solid #d1d5db;padding:7px 0}</style>${bodyHtml()}` }} /></main></div>
+    <div className="grid min-h-0 flex-1 lg:grid-cols-[240px_minmax(0,1fr)]"><aside className="overflow-y-auto border-r border-gray-200 bg-gray-50 p-4"><p className="text-xs font-semibold text-gray-500">출력 항목</p><div className="mt-3 space-y-1">{OPTION_LABELS.map(([key, label]) => <label key={key} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-white"><input type="checkbox" checked={options[key]} onChange={() => toggle(key)} className="h-4 w-4 accent-orange-600" />{label}</label>)}</div><div className="mt-5 border-t border-gray-200 pt-4"><p className="text-xs font-semibold text-gray-500">빈 면담 페이지</p><p className="mt-1 text-xs leading-5 text-gray-400">메모 공간이 더 필요하면 추가하세요.</p><div className="mt-3 flex items-center justify-between rounded-md border border-gray-200 bg-white p-2"><button type="button" onClick={() => setExtraPages((count) => Math.max(0, count - 1))} disabled={extraPages === 0} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0">−</button><strong className="text-sm tabular-nums text-gray-900">{extraPages}장 추가</strong><button type="button" onClick={() => setExtraPages((count) => Math.min(2, count + 1))} disabled={extraPages === 2} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0">+</button></div></div></aside>
+      <main className="overflow-auto bg-gray-200 p-5"><div className="meeting-print-sheet space-y-5" dangerouslySetInnerHTML={{ __html: `<style>.meeting-print-sheet .print-page{position:relative;min-height:880px;width:100%;max-width:680px;margin:0 auto;background:#fff;padding:36px 40px;color:#111827;font-size:11px;line-height:20px;box-shadow:0 1px 3px rgb(0 0 0 / 10%)}.meeting-print-sheet header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111827;padding-bottom:10px}.meeting-print-sheet h1{margin:2px 0;font-size:22px;font-weight:700}.meeting-print-sheet .eyebrow{font-size:10px;font-weight:700;color:#ea580c}.meeting-print-sheet .page-number{position:absolute;right:40px;bottom:24px;color:#6b7280;font-size:10px}.meeting-print-sheet section{margin-top:14px}.meeting-print-sheet h2{margin:0 0 7px;border-bottom:1px solid #d1d5db;padding-bottom:4px;font-size:12px;font-weight:700}.meeting-print-sheet .growth-title span{margin-left:8px;color:#9ca3af;font-size:10px;font-weight:400}.meeting-print-sheet .growth-content{margin-top:8px}.meeting-print-sheet .summary{display:flex;justify-content:space-between}.meeting-print-sheet .insight{padding:5px 0}.meeting-print-sheet .insight p{margin:2px 0 0;color:#4b5563}.meeting-print-sheet .line,.meeting-print-sheet .text{margin:4px 0;white-space:pre-wrap}.meeting-print-sheet .row{display:grid;grid-template-columns:110px 1fr;border-bottom:1px solid #e5e7eb;padding:5px}.meeting-print-sheet .memo-section{margin-top:18px}.meeting-print-sheet .writing-lines{height:220px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 24px,#d1d5db 25px)}.meeting-print-sheet .blank-lines{height:690px}</style>${pagesHtml()}` }} /></main></div>
     <footer className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4"><button type="button" onClick={onClose} className="ui-button ui-button-secondary">취소</button><button type="button" onClick={print} className="ui-button ui-button-primary">인쇄하기</button></footer>
   </section></div>
 }
