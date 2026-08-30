@@ -11,6 +11,7 @@ import Badge from './Badge'
 import PeerReviewSection from './PeerReviewSection'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
 import FileDropZone from './FileDropZone'
+import TitleHelp from './TitleHelp'
 import { useWorkspace } from '../state/WorkspaceContext'
 
 interface MemberForm {
@@ -99,7 +100,7 @@ export default function TeamManagement() {
     <CriteriaWorkspaceLayout>
     <div className="ui-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-black">팀원 관리</h3>
+        <div className="flex items-center gap-1.5"><h3 className="text-lg font-semibold text-black">팀원 관리</h3><TitleHelp label="팀원을 추가하거나 제외하면 평가 매트릭스에 자동 반영되며, 다른 평가기간의 이력은 유지됩니다." /></div>
         {activeView === 'members' && <div className="flex flex-wrap items-center gap-2"><button onClick={downloadMemberTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button><button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button><input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>}
       </div>
 

@@ -12,10 +12,10 @@ import {
   isContributionSumValid,
 } from '../utils/calculations'
 import { summarizePeerReviews } from '../utils/peerReview'
-import SectionHeader from './SectionHeader'
 import PeerReviewDetailDrawer from './PeerReviewDetailDrawer'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
 import EvaluationNoteButton from './EvaluationNoteButton'
+import TitleHelp from './TitleHelp'
 
 const TASK_MIN_WIDTH = 180
 const TASK_MAX_WIDTH = 520
@@ -69,11 +69,7 @@ export default function EvaluationMatrix() {
   return (
     <CriteriaWorkspaceLayout>
     <div className="space-y-3">
-      <SectionHeader compact title="평가 매트릭스" description={
-      <>
-        과제(행) × 팀원(열)로 기여도와 개인수행등급을 입력하세요. 참여하지 않은 칸은 비워두면 됩니다.{' '}
-        사용 중인 기준만 입력하고, 피어리뷰 추천값은 검토 후 선택적으로 적용하세요. 과제별 기여도 합계는 100%로 맞춰야 합니다.
-      </>} />
+      <header className="flex items-center gap-1.5"><h2 className="ui-page-title">평가 매트릭스</h2><TitleHelp label="과제별 기여도와 개인수행등급을 입력합니다. 참여하지 않은 칸은 비워두고, 과제별 기여도 합계는 100%로 맞춰주세요." /></header>
 
       {tasks.length === 0 || members.length === 0 ? (
         <p className="ui-empty">

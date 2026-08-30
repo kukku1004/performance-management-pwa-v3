@@ -7,6 +7,7 @@ import ConfirmDialog from './ConfirmDialog'
 import ImportFeedback from './ImportFeedback'
 import Badge from './Badge'
 import FileDropZone from './FileDropZone'
+import TitleHelp from './TitleHelp'
 import { downloadTaskTemplate, parseTaskWorkbook, type TaskImportResult } from '../utils/excel'
 import CriteriaWorkspaceLayout from './CriteriaWorkspaceLayout'
 
@@ -87,7 +88,7 @@ export default function TaskManagement() {
     <CriteriaWorkspaceLayout>
     <div className="ui-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-black">과제 관리</h3>
+        <div className="flex items-center gap-1.5"><h3 className="text-lg font-semibold text-black">과제 관리</h3><TitleHelp label="과제를 추가하거나 삭제하면 평가 매트릭스와 리포트에 즉시 반영됩니다." /></div>
         <div className="flex flex-wrap items-center gap-2"><button onClick={downloadTaskTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button><button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button><input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>
       </div>
       <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4" aria-label="과제 추가">
