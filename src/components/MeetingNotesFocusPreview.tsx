@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { MeetingNote, TeamMember } from '../types'
 import Badge from './Badge'
 import DisclosureIcon from './DisclosureIcon'
 import MemberGrowthOverview from './MemberGrowthOverview'
 import RecentPerformanceSummary from './RecentPerformanceSummary'
 import MeetingCalendar from './MeetingCalendar'
+import { COLLAPSED_PANEL_WIDTH, PANEL_SPLITTER_WIDTH, PanelSplitter } from './PanelControls'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory } from '../utils/growth'
 import type { MemberInsight } from '../utils/memberInsights'
@@ -63,6 +64,7 @@ function MoodGlyph({ value, className = 'h-6 w-6' }: { value?: string; className
   return <img src={mood.asset} alt="" className={`${className} block`} />
 }
 const DOCUMENT_USABLE_MIN_WIDTH = 620
+const REFERENCE_USABLE_MIN_WIDTH = 150
 const CALENDAR_RAIL_MIN_WIDTH = 120
 const HISTORY_RAIL_WIDTH = 56
 
@@ -81,8 +83,9 @@ export default function MeetingNotesFocusPreview({
   const [noteColorPicker, setNoteColorPicker] = useState<string | null>(null)
   const [growthOpen, setGrowthOpen] = useState(false)
   const [performanceOpen, setPerformanceOpen] = useState(false)
-  const [scoreDetailsOpen, setScoreDetailsOpen] = useState(false)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
+  const layoutRef = useRef<HTMLDivElement>(null)
+  const [documentWidth, setDocumentWidth] = useState(760)
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
   const loadedNote = selectedNoteId ? notes.find((note) => note.id === selectedNoteId) ?? null : null
   const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId) ?? getDefaultGrowthProfile(selectedMemberId)
@@ -90,17 +93,10 @@ export default function MeetingNotesFocusPreview({
   const currentSimulation = calculatePromotionSimulation(evaluationHistory, { ...storedProfile, performanceHistory: [] }, selectedMember.level)
   const expectedSimulation = calculatePromotionSimulation(evaluationHistory, storedProfile, selectedMember.level)
   const expectedGap = Math.round((expectedSimulation.currentScore - expectedSimulation.targetScore) * 10) / 10
-  const simulationBonus = Math.round((expectedSimulation.currentScore - currentSimulation.currentScore) * 10) / 10
-  const simulationBonusRows = expectedSimulation.rows.flatMap((row) => {
-    const currentRow = currentSimulation.rows.find((item) => item.year === row.year)
-    const bonus = Math.round((row.weighted - (currentRow?.weighted ?? 0)) * 10) / 10
-    return Math.abs(bonus) < 0.1 ? [] : [{ year: row.year, bonus }]
-  })
   const personalNotes = (storedProfile.personalNotes ?? []).map((note, index) => typeof note === 'string' ? { id: `legacy-${index}`, content: note, color: 'gray' as const } : note)
 
   useEffect(() => {
     setSelectedNoteId(null)
-    setScoreDetailsOpen(false)
     setPerformanceOpen(false)
   }, [selectedMemberId])
 
@@ -161,6 +157,24 @@ export default function MeetingNotesFocusPreview({
     }, 80)
   }
 
+  function startResize(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    const startX = event.clientX
+    const startDocument = documentWidth
+    const available = layoutRef.current?.clientWidth ?? 1440
+    function move(moveEvent: PointerEvent) {
+      const proposed = startDocument + moveEvent.clientX - startX
+      const calendarWidth = calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH
+      const fixedWidth = calendarWidth + 1 + 12 + HISTORY_RAIL_WIDTH + PANEL_SPLITTER_WIDTH
+      const maximum = Math.max(DOCUMENT_USABLE_MIN_WIDTH, available - fixedWidth - REFERENCE_USABLE_MIN_WIDTH)
+      setPerformanceOpen(available - fixedWidth - proposed >= REFERENCE_USABLE_MIN_WIDTH)
+      setDocumentWidth(Math.max(DOCUMENT_USABLE_MIN_WIDTH, Math.min(maximum, proposed)))
+    }
+    function up() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   return <div className="meeting-focus-shell">
     <div className="meeting-focus-members" role="tablist" aria-label="면담 팀원 선택">
       {members.map((member) => <button key={member.id} type="button" role="tab" aria-selected={member.id === selectedMemberId} onClick={() => onSelectMember(member.id)} className={`meeting-focus-member-tab ${member.id === selectedMemberId ? 'meeting-focus-member-tab-active' : ''}`}>
@@ -169,7 +183,9 @@ export default function MeetingNotesFocusPreview({
       </button>)}
     </div>
 
-    <div className="meeting-focus-workspace meeting-focus-workspace-expanded" style={{ gridTemplateColumns: `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(${DOCUMENT_USABLE_MIN_WIDTH}px, 1fr)` }}>
+    <div ref={layoutRef} className={`meeting-focus-workspace ${performanceOpen ? '' : 'meeting-focus-workspace-expanded'}`} style={{ gridTemplateColumns: performanceOpen
+      ? `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(${DOCUMENT_USABLE_MIN_WIDTH}px, ${documentWidth}px) ${PANEL_SPLITTER_WIDTH}px minmax(${REFERENCE_USABLE_MIN_WIDTH}px, 1fr)`
+      : `${calendarOpen ? 340 : CALENDAR_RAIL_MIN_WIDTH}px 1px 12px ${HISTORY_RAIL_WIDTH}px minmax(0, 1fr) ${PANEL_SPLITTER_WIDTH}px ${COLLAPSED_PANEL_WIDTH}px` }}>
       <aside className="meeting-focus-timeline">
         <MeetingCalendar notes={allNotes} members={members} selectedMemberId={selectedMemberId} open={calendarOpen} onToggle={() => setCalendarOpen((value) => !value)} />
       </aside>
@@ -197,15 +213,13 @@ export default function MeetingNotesFocusPreview({
             <div className="meeting-focus-score-grid">
               <div><p>목표 점수</p><strong>{expectedSimulation.targetScore}점</strong></div>
               <div><p>현재 점수</p><strong>{currentSimulation.currentScore}점</strong></div>
-              <button type="button" onClick={() => setScoreDetailsOpen((value) => !value)} aria-expanded={scoreDetailsOpen} className={`meeting-focus-score-final text-left ${expectedGap >= 0 ? 'meeting-focus-score-final-met' : 'meeting-focus-score-final-short'}`}><p>최종 기대 점수</p><span className="meeting-focus-score-result"><strong>{expectedSimulation.currentScore}점</strong><em className={expectedGap >= 0 ? 'text-green-500' : 'text-orange-600'}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</em><DisclosureIcon open={scoreDetailsOpen} className="ml-1 h-3.5 w-3.5 text-gray-400" /></span></button>
+              <div className={`meeting-focus-score-final ${expectedGap >= 0 ? 'meeting-focus-score-final-met' : 'meeting-focus-score-final-short'}`}><p>최종 기대 점수</p><span className="meeting-focus-score-result"><strong>{expectedSimulation.currentScore}점</strong><em className={expectedGap >= 0 ? 'text-green-500' : 'text-orange-600'}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</em></span></div>
             </div>
             <div id="meeting-simulation-trigger" className="flex shrink-0 items-center" />
           </div>
         </section>
 
-        {scoreDetailsOpen && <section className="border-b border-gray-200 bg-white py-4" aria-label="최종 기대 점수 상세"><div className="flex flex-wrap items-stretch gap-3"><div className="min-w-36 rounded-lg bg-gray-50 px-4 py-3"><p className="text-xs font-medium text-gray-500">승진자격 점수</p><strong className="mt-1 block text-xl tabular-nums text-gray-950">{expectedSimulation.targetScore.toFixed(1)}점</strong></div><div className="min-w-36 rounded-lg bg-gray-50 px-4 py-3"><p className="text-xs font-medium text-gray-500">현재 점수</p><strong className="mt-1 block text-xl tabular-nums text-gray-950">{currentSimulation.currentScore.toFixed(1)}점</strong></div><div className="min-w-44 rounded-lg bg-blue-50 px-4 py-3"><p className="text-xs font-medium text-gray-500">시뮬레이션 가산</p><strong className="mt-1 block text-xl tabular-nums text-blue-600">{simulationBonus >= 0 ? '+' : ''}{simulationBonus.toFixed(1)}점</strong></div><div className={`min-w-48 rounded-lg px-4 py-3 ${expectedGap >= 0 ? 'bg-emerald-50' : 'bg-orange-50'}`}><p className="text-xs font-medium text-gray-500">최종 시뮬레이션 점수</p><strong className={`mt-1 block text-xl tabular-nums ${expectedGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{expectedSimulation.currentScore.toFixed(1)}점</strong></div></div><div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600"><strong className="text-gray-800">가산 근거</strong>{simulationBonusRows.length > 0 ? simulationBonusRows.map((item) => <span key={item.year} className="rounded-md border border-gray-200 bg-white px-2 py-1">{item.year}년 입력 {item.bonus >= 0 ? '+' : ''}{item.bonus.toFixed(1)}점</span>) : <span className="text-gray-400">추가 입력으로 반영된 가산점이 없습니다.</span>}</div></section>}
-
-        <section className="border-b border-gray-200 bg-slate-50 px-4 py-3"><button type="button" onClick={() => setPerformanceOpen((value) => !value)} className="flex w-full items-center justify-between text-left"><span className="flex items-center gap-2"><strong className="text-sm text-gray-900">성과</strong><span className="text-xs text-gray-400">평가기간별 성과 요약</span></span><DisclosureIcon open={performanceOpen} className="h-4 w-4 text-gray-500" /></button>{performanceOpen && <div className="mt-4"><RecentPerformanceSummary member={selectedMember} /></div>}</section>
+        <section className="border-b border-gray-200 bg-slate-50 px-4 py-3"><button type="button" onClick={() => setPerformanceOpen((value) => !value)} className="flex w-full items-center justify-between text-left"><span className="flex items-center gap-2"><strong className="text-sm text-gray-900">성과</strong><span className="text-xs text-gray-400">면담 영역 옆에서 평가기간별 성과를 확인합니다.</span></span><DisclosureIcon open={performanceOpen} className="h-4 w-4 text-gray-500" /></button></section>
 
         <div className="meeting-focus-content meeting-focus-content-expanded">
         <div className="meeting-focus-compose">
@@ -231,8 +245,9 @@ export default function MeetingNotesFocusPreview({
         </div>
         </div>
       </main>
+      <PanelSplitter aria-label="면담일지와 성과 영역 너비 조절" onPointerDown={startResize} />
+      <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight simulationTriggerContainerId="meeting-simulation-trigger" performanceOpen={performanceOpen} onPanelMinimizedChange={(minimized) => setPerformanceOpen(!minimized)} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
-    <MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight simulationTriggerContainerId="meeting-simulation-trigger" showPerformancePanel={false} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} />
     {printPreviewOpen && <MeetingPrintPreview member={selectedMember} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
   </div>
 }
