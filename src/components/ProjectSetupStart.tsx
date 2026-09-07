@@ -15,12 +15,12 @@ import {
 } from '../utils/excel'
 import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/growthExcel'
 import { mergePerformancePdfIntoGrowthProfiles, parsePerformancePdf, performanceDocumentMatchesPeriod, type PerformancePdfParseResult } from '../utils/performancePdf'
-import { createPerformanceMeetingNote } from '../utils/performanceMeeting'
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
 import Badge from './Badge'
 import ModalCloseButton from './ModalCloseButton'
+import PerformanceCommentSelector from './PerformanceCommentSelector'
 
 type StartMode = 'direct' | 'excel' | 'previous'
 type DirectTarget = 'tasks' | 'members'
@@ -86,7 +86,7 @@ function mergeNames(current: string[], additions: string[]) {
 
 export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: ProjectSetupStartProps) {
   const { state, dispatch } = useAppState()
-  const { workspace, activeProject, activeTeam, saveGrowthProfile, saveMeetingNote } = useWorkspace()
+  const { workspace, activeProject, activeTeam, saveGrowthProfile } = useWorkspace()
   const [mode, setMode] = useState<StartMode>('direct')
   const [directTarget, setDirectTarget] = useState<DirectTarget>('tasks')
   const [draftInput, setDraftInput] = useState('')
@@ -433,13 +433,18 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
   function saveSelectedPdfComments() {
     let saved = 0
     pendingPdfComments.forEach((item) => {
-      const note = createPerformanceMeetingNote(item.document, item.memberId, item.document.comments.filter((_, index) => item.selected.includes(index)))
-      if (!note) return
-      saveMeetingNote(note)
-      saved += 1
+      const selectedComments = item.document.comments.filter((_, index) => item.selected.includes(index))
+      if (selectedComments.length === 0) return
+      const profile = activeTeam?.growthProfiles.find((value) => value.memberId === item.memberId)
+      if (!profile) return
+      saveGrowthProfile({
+        ...profile,
+        importedPerformanceDocuments: (profile.importedPerformanceDocuments ?? []).map((document) => document.id === item.document.id ? { ...document, selectedComments } : document),
+      })
+      saved += selectedComments.length
     })
     setPendingPdfComments([])
-    setMessage((current) => `${current} 선택한 성과 코멘트를 면담 기록 ${saved}건으로 저장했습니다.`)
+    setMessage((current) => `${current} 선택한 성과 코멘트 ${saved}건을 코멘트 기록으로 저장했습니다.`)
   }
 
   function selectSourceProject(projectId: string) {
@@ -628,7 +633,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
                   ))}
                 </div>
               </aside>}
-              {pendingPdfComments.length > 0 && <section className="mt-4 rounded-lg border border-orange-200 bg-orange-50/40 p-4"><div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-semibold text-gray-950">면담 기록으로 가져올 성과 코멘트</h4><p className="mt-1 text-xs leading-5 text-gray-500">선택한 코멘트만 팀원별·평가기간별 면담 히스토리로 저장됩니다.</p></div><span className="shrink-0 text-xs font-medium text-accent">{pendingPdfComments.reduce((sum, item) => sum + item.selected.length, 0)}개 선택</span></div><div className="mt-3 max-h-56 space-y-3 overflow-y-auto">{pendingPdfComments.map((item) => <div key={item.document.id} className="rounded-md border border-gray-200 bg-white p-3"><strong className="text-sm text-gray-900">{item.document.memberName} · {item.document.periodLabel}</strong><p className="mt-0.5 truncate text-xs text-gray-400">{item.document.fileName}</p><div className="mt-2 space-y-2">{item.document.comments.map((comment, index) => <label key={`${index}-${comment}`} className="flex cursor-pointer items-start gap-2 text-xs leading-5 text-gray-700"><input type="checkbox" checked={item.selected.includes(index)} onChange={() => togglePdfComment(item.document.id, index)} className="mt-0.5 h-4 w-4 accent-[#c05621]" /><span className="whitespace-pre-wrap">{comment}</span></label>)}</div></div>)}</div><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => setPendingPdfComments([])} className="ui-button ui-button-secondary ui-button-sm">코멘트 가져오지 않기</button><button type="button" onClick={saveSelectedPdfComments} disabled={!pendingPdfComments.some((item) => item.selected.length > 0)} className="ui-button ui-button-primary ui-button-sm">선택 코멘트 면담 기록에 저장</button></div></section>}
+              {pendingPdfComments.length > 0 && <section className="mt-4 rounded-lg border border-orange-200 bg-orange-50/40 p-4"><div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-semibold text-gray-950">코멘트 기록으로 가져오기</h4><p className="mt-1 text-xs leading-5 text-gray-500">각 코멘트는 한 줄로 표시됩니다. 펼쳐본 뒤 선택한 내용만 면담 기록과 분리해 저장합니다.</p></div><span className="shrink-0 text-xs font-medium text-accent">{pendingPdfComments.reduce((sum, item) => sum + item.selected.length, 0)}개 선택</span></div><div className="mt-3 max-h-64 space-y-3 overflow-y-auto">{pendingPdfComments.map((item) => <div key={item.document.id} className="rounded-md border border-gray-200 bg-white p-3"><strong className="text-sm text-gray-900">{item.document.memberName} · {item.document.periodLabel}</strong><p className="mt-0.5 truncate text-xs text-gray-400">{item.document.fileName}</p><div className="mt-2"><PerformanceCommentSelector comments={item.document.comments} selected={item.selected} onToggle={(index) => togglePdfComment(item.document.id, index)} /></div></div>)}</div><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => setPendingPdfComments([])} className="ui-button ui-button-secondary ui-button-sm">코멘트 가져오지 않기</button><button type="button" onClick={saveSelectedPdfComments} disabled={!pendingPdfComments.some((item) => item.selected.length > 0)} className="ui-button ui-button-primary ui-button-sm">선택 코멘트 기록에 저장</button></div></section>}
               <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls,.pdf,application/pdf" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
             </div>
           </section>}

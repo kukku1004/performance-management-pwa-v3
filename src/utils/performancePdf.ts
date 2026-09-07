@@ -196,10 +196,14 @@ export function mergePerformancePdfIntoGrowthProfiles(
   const byMemberId = new Map(profiles.map((profile) => [profile.memberId, profile]))
   const current = byMemberId.get(member.id) ?? getDefaultGrowthProfile(member.id)
   const documents = current.importedPerformanceDocuments ?? []
+  const previousDocument = documents.find((item) => item.id === document.id)
+  const mergedDocument = previousDocument?.selectedComments
+    ? { ...document, selectedComments: previousDocument.selectedComments }
+    : document
   byMemberId.set(member.id, {
     ...current,
     performanceHistory: mergeRecords(current.performanceHistory, document),
-    importedPerformanceDocuments: [...documents.filter((item) => item.id !== document.id), document]
+    importedPerformanceDocuments: [...documents.filter((item) => item.id !== document.id), mergedDocument]
       .sort((a, b) => b.year - a.year || b.half.localeCompare(a.half)),
   })
   return { profiles: Array.from(byMemberId.values()), importedMembers: [member.name], errors: parsed.errors, document }

@@ -189,6 +189,7 @@ export interface ImportedPerformanceDocument {
   finalGrade: EvaluationGrade | null
   tasks: ImportedPerformanceTask[]
   comments: string[]
+  selectedComments?: string[]
 }
 
 export interface MemberPersonalNote {

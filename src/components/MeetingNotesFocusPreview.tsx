@@ -20,6 +20,7 @@ interface MeetingNotesFocusPreviewProps {
   onSelectMember: (memberId: string) => void
   notes: MeetingNote[]
   allNotes: MeetingNote[]
+  importedCommentNotes: MeetingNote[]
   insights: MemberInsight[]
   newDate: string
   newComment: string
@@ -70,11 +71,11 @@ const CALENDAR_RAIL_MIN_WIDTH = 120
 const HISTORY_RAIL_WIDTH = 56
 
 export default function MeetingNotesFocusPreview({
-  members, selectedMember, selectedMemberId, onSelectMember, notes, allNotes, insights,
+  members, selectedMember, selectedMemberId, onSelectMember, notes, allNotes, importedCommentNotes, insights,
   newDate, newComment, newMood, growthPoints, onDateChange, onCommentChange, onMoodChange, onGrowthPointsChange,
   onAdd, onUpdateLoaded, onEdit, editingNoteId, editDate, editComment, editMood, onEditDateChange, onEditCommentChange, onEditMoodChange, onSaveEdit, onCancelEdit, onDelete, getMemberGrade,
 }: MeetingNotesFocusPreviewProps) {
-  const { workspace, activeTeam, saveGrowthProfile, saveMeetingNote } = useWorkspace()
+  const { workspace, activeTeam, saveGrowthProfile } = useWorkspace()
   const [insightsOpen, setInsightsOpen] = useState(true)
   const [historyOpen, setHistoryOpen] = useState(true)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -96,6 +97,18 @@ export default function MeetingNotesFocusPreview({
   const expectedSimulation = calculatePromotionSimulation(evaluationHistory, storedProfile, selectedMember.level)
   const expectedGap = Math.round((expectedSimulation.currentScore - expectedSimulation.targetScore) * 10) / 10
   const personalNotes = (storedProfile.personalNotes ?? []).map((note, index) => typeof note === 'string' ? { id: `legacy-${index}`, content: note, color: 'gray' as const } : note)
+  const performanceCommentRecords = (storedProfile.importedPerformanceDocuments ?? []).flatMap((document) => {
+    const comments = document.selectedComments ?? []
+    return comments.length > 0 ? [{ id: document.id, period: document.periodLabel, fileName: document.fileName, comments }] : []
+  })
+  const recordedDocumentIds = new Set(performanceCommentRecords.map((record) => `meeting-${record.id}`))
+  const legacyCommentRecords = importedCommentNotes.filter((note) => !recordedDocumentIds.has(note.id)).map((note) => ({
+    id: note.id,
+    period: note.sourcePeriod ?? note.date,
+    fileName: note.sourceFileName ?? '',
+    comments: note.comment.split(/\n{2,}/).map((comment) => comment.trim()).filter(Boolean),
+  }))
+  const allCommentRecords = [...performanceCommentRecords, ...legacyCommentRecords]
 
   useEffect(() => {
     setSelectedNoteId(null)
@@ -226,7 +239,6 @@ export default function MeetingNotesFocusPreview({
         <div className="meeting-focus-content meeting-focus-content-expanded">
         <div className="meeting-focus-compose">
         <section className="mt-6">
-          {loadedNote?.source === 'performance-pdf' && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2"><div><strong className="text-sm text-gray-900">{loadedNote.sourcePeriod} 성과 코멘트</strong><p className="mt-0.5 text-xs text-gray-500">{loadedNote.sourceFileName}</p></div><Badge tone="accent">면담 히스토리</Badge></div>}
           <div className="flex flex-wrap items-center gap-3"><input type="date" value={newDate} onChange={(event) => onDateChange(event.target.value)} className="ui-field w-auto" /><div className="flex items-center gap-1" aria-label="면담 분위기">{MOODS.map((mood) => { const selected = newMood === mood.value; return <button key={mood.value} type="button" title={mood.label} aria-label={mood.label} aria-pressed={selected} onClick={() => onMoodChange(selected ? '' : mood.value)} className={`flex h-8 w-8 items-center justify-center rounded-md border transition ${selected ? 'border-current' : 'border-transparent hover:bg-gray-50'}`} style={{ color: mood.color, backgroundColor: selected ? `${mood.color}14` : undefined }}><MoodGlyph value={mood.value} className="h-5 w-5" /></button> })}</div><span className="ml-auto flex gap-2"><button type="button" onClick={() => setPrintPreviewOpen(true)} className="ui-button ui-button-secondary ui-button-sm">면담용지</button>{loadedNote ? <><button type="button" onClick={() => onDelete(loadedNote)} className="ui-button ui-button-danger ui-button-sm">삭제</button><button type="button" onClick={() => onUpdateLoaded(loadedNote)} disabled={!newComment.trim()} className="ui-button ui-button-primary ui-button-sm">수정하기</button></> : <button type="button" onClick={onAdd} disabled={!newComment.trim()} className="ui-button ui-button-primary ui-button-sm">작성하기</button>}</span></div>
           <textarea value={newComment} onChange={(event) => onCommentChange(event.target.value)} rows={7} placeholder="면담 내용을 입력하세요." className="ui-field mt-3 min-h-32 w-full resize-y" />
           <section className="mt-4 border-t border-gray-200 pt-3"><button type="button" onClick={() => setGrowthOpen((value) => !value)} className="flex w-full items-center gap-2 text-left"><DisclosureIcon open={growthOpen} className="h-4 w-4 text-gray-400"/><strong className="text-sm text-gray-800">육성 포인트</strong><span className="text-xs text-gray-400">강점 · 보완 필요 · 다음 경험 · Career Goal</span></button>{growthOpen && <div className="mt-3 grid gap-3"><label><span className="ui-label">강점</span><input value={growthPoints.strength} onChange={(event) => onGrowthPointsChange({ ...growthPoints, strength: event.target.value })} placeholder="강점 입력" className="ui-field" /></label><label><span className="ui-label">보완 필요</span><input value={growthPoints.improvement} onChange={(event) => onGrowthPointsChange({ ...growthPoints, improvement: event.target.value })} placeholder="보완이 필요한 영역 입력" className="ui-field" /></label><label><span className="ui-label">다음 도전 경험</span><input value={growthPoints.challenge} onChange={(event) => onGrowthPointsChange({ ...growthPoints, challenge: event.target.value })} placeholder="도전해 보고 싶은 경험 입력" className="ui-field" /></label><label><span className="ui-label">Career Goal</span><input value={growthPoints.careerGoal} onChange={(event) => onGrowthPointsChange({ ...growthPoints, careerGoal: event.target.value })} placeholder="성장 커리어/목표 입력" className="ui-field" /></label></div>}</section>
@@ -245,6 +257,11 @@ export default function MeetingNotesFocusPreview({
           {historyOpen && <div className="divide-y divide-gray-100">{sortedNotes.map((note) => <article key={note.id} className="py-4">{editingNoteId === note.id ? <div className="rounded-lg border border-gray-200 bg-gray-50 p-4"><div className="flex flex-wrap items-center gap-3"><input type="date" value={editDate} onChange={(event) => onEditDateChange(event.target.value)} className="ui-field w-auto" /><div className="flex items-center gap-1" aria-label="면담 분위기 수정">{MOODS.map((mood) => { const selected = editMood === mood.value; return <button key={mood.value} type="button" title={mood.label} aria-label={mood.label} aria-pressed={selected} onClick={() => onEditMoodChange(selected ? '' : mood.value)} className={`flex h-8 w-8 items-center justify-center rounded-md border transition ${selected ? 'border-current' : 'border-transparent hover:bg-white'}`} style={{ color: mood.color, backgroundColor: selected ? `${mood.color}14` : undefined }}><MoodGlyph value={mood.value} className="h-5 w-5" /></button> })}</div></div><textarea autoFocus value={editComment} onChange={(event) => onEditCommentChange(event.target.value)} rows={4} className="ui-field mt-3 resize-y" /><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={onCancelEdit} className="ui-button ui-button-secondary ui-button-sm">취소</button><button type="button" disabled={!editDate || !editComment.trim()} onClick={() => onSaveEdit(note)} className="ui-button ui-button-primary ui-button-sm">수정 저장</button></div></div> : <div className="flex items-start justify-between gap-3"><div><strong className="flex items-center gap-2 text-sm text-gray-950">{note.mood && <MoodGlyph value={note.mood} />}{note.sourcePeriod ?? note.date}{note.source === 'performance-pdf' && <Badge tone="accent">성과 PDF</Badge>}</strong>{note.sourceFileName && <p className="mt-1 text-xs text-gray-400">{note.sourceFileName}</p>}<p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">{note.comment}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => openMeetingNote(note)} className="ui-button ui-button-ghost ui-button-sm" title="상세 보기">상세</button><button type="button" onClick={() => onEdit(note)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="수정" aria-label={`${note.date} 면담 수정`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" /></svg></button><button type="button" onClick={() => onDelete(note)} className="ui-button ui-button-danger ui-button-sm h-8 w-8 px-0" title="삭제" aria-label={`${note.date} 면담 삭제`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" /></svg></button><button type="button" onClick={() => printMeetingNote(note)} className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" title="출력" aria-label={`${note.date} 면담 출력`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8"><path d="M7 9V4h10v5M7 17H5V9h14v8h-2M7 14h10v6H7z" /></svg></button></div></div>}</article>)}</div>}
         </section>
 
+        <section className="mt-7">
+          <div className="flex items-center justify-between border-b border-gray-200 pb-3"><span className="flex items-center gap-2"><h3 className="ui-section-title">코멘트만 모아보기</h3><span className="text-xs text-gray-400">{allCommentRecords.reduce((sum, record) => sum + record.comments.length, 0)}건</span></span></div>
+          {allCommentRecords.length === 0 ? <p className="py-5 text-sm text-gray-400">가져온 성과 코멘트가 없습니다.</p> : <div className="divide-y divide-gray-100">{allCommentRecords.map((record) => <article key={record.id} className="py-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm text-gray-950">{record.period}</strong>{record.fileName && <span className="max-w-72 truncate text-xs text-gray-400">{record.fileName}</span>}</div><div className="mt-2 space-y-2">{record.comments.map((comment, index) => <details key={`${record.id}-${index}`} className="group rounded-md border border-gray-200 px-3 py-2"><summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-gray-700"><span className="shrink-0 text-xs font-semibold text-gray-500">코멘트 {index + 1}</span><span className="min-w-0 flex-1 truncate group-open:hidden">{comment}</span><span className="ml-auto text-xs font-medium text-gray-400 group-open:hidden">펼쳐보기</span><span className="ml-auto hidden text-xs font-medium text-gray-400 group-open:inline">접기</span></summary><p className="mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2 text-sm leading-6 text-gray-700">{comment}</p></details>)}</div></article>)}</div>}
+        </section>
+
         </div>
         </div>
       </main>
@@ -252,6 +269,6 @@ export default function MeetingNotesFocusPreview({
       <aside className="meeting-focus-reference"><MemberGrowthOverview member={selectedMember} compact collapsible hideSummary simulationOnRight simulationTriggerContainerId="meeting-simulation-trigger" onPanelMinimizedChange={setReferencePanelsMinimized} collapsedContent={<RecentPerformanceSummary member={selectedMember} />} /></aside>
     </div>
     {printPreviewOpen && <MeetingPrintPreview member={selectedMember} history={evaluationHistory} insights={insights} latestNote={sortedNotes[0] ?? null} draft={newComment} growthPoints={growthPoints} onClose={() => setPrintPreviewOpen(false)} />}
-    {historyImportOpen && <GrowthHistoryImportDialog members={members} profiles={activeTeam?.growthProfiles ?? []} onApply={(profiles, meetingNote) => { profiles.forEach(saveGrowthProfile); if (meetingNote) saveMeetingNote(meetingNote) }} onClose={() => setHistoryImportOpen(false)} />}
+    {historyImportOpen && <GrowthHistoryImportDialog members={members} profiles={activeTeam?.growthProfiles ?? []} onApply={(profiles) => { profiles.forEach(saveGrowthProfile) }} onClose={() => setHistoryImportOpen(false)} />}
   </div>
 }

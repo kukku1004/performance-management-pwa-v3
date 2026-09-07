@@ -16,7 +16,9 @@ export default function MeetingNotes() {
   const { workspace, activeTeam, saveMeetingNote, deleteMeetingNote } = useWorkspace()
   const members = state.members
   const currentMemberIds = new Set(members.map((member) => member.id))
-  const meetingNotes = (activeTeam?.meetingNotes ?? state.meetingNotes).filter((note) => currentMemberIds.has(note.memberId))
+  const allStoredNotes = (activeTeam?.meetingNotes ?? state.meetingNotes).filter((note) => currentMemberIds.has(note.memberId))
+  const meetingNotes = allStoredNotes.filter((note) => note.source !== 'performance-pdf')
+  const importedCommentNotes = allStoredNotes.filter((note) => note.source === 'performance-pdf')
   const [selectedMemberId, setSelectedMemberId] = useState(members[0]?.id ?? '')
   const [newDate, setNewDate] = useState(todayString())
   const [newComment, setNewComment] = useState('')
@@ -80,7 +82,7 @@ export default function MeetingNotes() {
     {members.length === 0 || !selectedMember ? <p className="ui-empty">등록된 팀원이 없습니다. 팀원 관리에서 먼저 팀원을 등록하세요.</p> : <div className="-mt-5 overflow-hidden bg-white">
       <MeetingNotesFocusPreview
         members={members} selectedMember={selectedMember} selectedMemberId={selectedMemberId} onSelectMember={setSelectedMemberId}
-        notes={notesForMember} allNotes={meetingNotes} insights={meetingInsights}
+        notes={notesForMember} allNotes={meetingNotes} importedCommentNotes={importedCommentNotes.filter((note) => note.memberId === selectedMemberId)} insights={meetingInsights}
         newDate={newDate} newComment={newComment} newMood={newMood} growthPoints={newGrowthPoints}
         onDateChange={setNewDate} onCommentChange={setNewComment} onMoodChange={setNewMood} onGrowthPointsChange={setNewGrowthPoints}
         onAdd={handleAdd} onUpdateLoaded={updateLoadedNote} onEdit={startEdit}
