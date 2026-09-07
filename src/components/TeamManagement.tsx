@@ -38,6 +38,8 @@ export default function TeamManagement() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
   const [activeView, setActiveView] = useState<'members' | 'peer'>('members')
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const hasMembers = state.members.length > 0
 
@@ -73,8 +75,29 @@ export default function TeamManagement() {
   function handleDeleteConfirm() {
     if (deletingMember) {
       dispatch({ type: 'DELETE_MEMBER', payload: { id: deletingMember.id } })
+      setSelectedMemberIds((current) => new Set(Array.from(current).filter((id) => id !== deletingMember.id)))
       setDeletingMember(null)
     }
+  }
+
+  function toggleMemberSelection(id: string) {
+    setSelectedMemberIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllMembers() {
+    setSelectedMemberIds((current) => current.size === state.members.length ? new Set() : new Set(state.members.map((member) => member.id)))
+  }
+
+  function handleBulkDeleteConfirm() {
+    dispatch({ type: 'DELETE_MEMBERS', payload: { ids: Array.from(selectedMemberIds) } })
+    setRecentlyAddedIds((current) => new Set(Array.from(current).filter((id) => !selectedMemberIds.has(id))))
+    setSelectedMemberIds(new Set())
+    setBulkDeleteOpen(false)
   }
 
   function toggleMemberActive(member: TeamMember) {
@@ -88,6 +111,7 @@ export default function TeamManagement() {
     dispatch({ type: 'IMPORT_MEMBERS', payload: result.members })
     setImportResult(result)
     setRecentlyAddedIds(new Set(result.addedIds))
+    setSelectedMemberIds(new Set())
     setUploadOpen(false)
   }
 
@@ -137,10 +161,13 @@ export default function TeamManagement() {
       )}
 
       {hasMembers ? (
+      <div>
+      {selectedMemberIds.size > 0 && <div className="mb-3 flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3"><p className="text-sm font-medium text-orange-800">팀원 {selectedMemberIds.size}명 선택됨</p><button type="button" onClick={() => setBulkDeleteOpen(true)} className="ui-button ui-button-danger ui-button-sm">선택 팀원 삭제</button></div>}
       <div className="ui-table-wrap">
         <table className="ui-table min-w-[900px]">
           <thead>
             <tr>
+              <th className="w-12 px-3 py-3 text-center"><input type="checkbox" aria-label="팀원 전체 선택" checked={selectedMemberIds.size === state.members.length} onChange={toggleAllMembers} /></th>
               <th className="px-4 py-3 font-semibold">이름</th>
               <th className="px-4 py-3 font-semibold">직책</th>
               <th className="px-4 py-3 font-semibold">직급</th>
@@ -156,6 +183,7 @@ export default function TeamManagement() {
               const { count } = calcMemberParticipation(member, state.tasks, state.contributions)
               return editingMemberId === member.id ? (
                 <tr key={member.id} className="border-t border-gray-200 bg-orange-50/30 text-black">
+                  <td className="px-3 py-2 text-center"><input type="checkbox" aria-label={`${member.name} 선택`} checked={selectedMemberIds.has(member.id)} onChange={() => toggleMemberSelection(member.id)} /></td>
                   <td className="px-3 py-2"><input value={editForm.name} onChange={(event) => setEditForm((form) => ({ ...form, name: event.target.value }))} className="ui-field ui-field-sm" />{editFormError && <p className="mt-1 text-xs text-danger">{editFormError}</p>}</td>
                   <td className="px-3 py-2"><select value={editForm.position} onChange={(event) => setEditForm((form) => ({ ...form, position: event.target.value as Position | '' }))} className="ui-field ui-field-sm"><option value="">-</option>{POSITION_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></td>
                   <td className="px-3 py-2"><select value={editForm.level} onChange={(event) => setEditForm((form) => ({ ...form, level: event.target.value as Level | '' }))} className="ui-field ui-field-sm"><option value="">-</option>{LEVEL_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></td>
@@ -167,6 +195,7 @@ export default function TeamManagement() {
                 </tr>
               ) : (
                 <tr key={member.id} className="border-t border-gray-200 text-black">
+                  <td className="px-3 py-3 text-center"><input type="checkbox" aria-label={`${member.name} 선택`} checked={selectedMemberIds.has(member.id)} onChange={() => toggleMemberSelection(member.id)} /></td>
                   <td className="px-4 py-3 font-medium">
                     <span className="inline-flex items-center gap-1.5">
                       {member.name}
@@ -205,6 +234,7 @@ export default function TeamManagement() {
           </tbody>
         </table>
       </div>
+      </div>
       ) : null}
 
       <section className="rounded-lg border border-gray-200 bg-white p-4" aria-label="팀원 추가">
@@ -226,6 +256,13 @@ export default function TeamManagement() {
         message={`'${deletingMember?.name}' 팀원을 현재 평가 프로젝트에서 제외하시겠습니까? 현재 기간의 기여도는 삭제되지만 다른 평가기간 이력은 유지됩니다.`}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingMember(null)}
+      />
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title="선택 팀원 삭제"
+        message={`선택한 팀원 ${selectedMemberIds.size}명을 현재 평가 프로젝트에서 제외하시겠습니까? 현재 기간의 기여도·피어리뷰·면담 기록은 삭제되며 다른 평가기간 이력은 유지됩니다.`}
+        onConfirm={handleBulkDeleteConfirm}
+        onCancel={() => setBulkDeleteOpen(false)}
       />
       </>}
     </div>

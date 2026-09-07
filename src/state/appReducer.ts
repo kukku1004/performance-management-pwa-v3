@@ -5,10 +5,12 @@ export type AppAction =
   | { type: 'ADD_TASK'; payload: Task }
   | { type: 'UPDATE_TASK'; payload: Task }
   | { type: 'DELETE_TASK'; payload: { id: string } }
+  | { type: 'DELETE_TASKS'; payload: { ids: string[] } }
   | { type: 'IMPORT_TASKS'; payload: Task[] }
   | { type: 'ADD_MEMBER'; payload: TeamMember }
   | { type: 'UPDATE_MEMBER'; payload: TeamMember }
   | { type: 'DELETE_MEMBER'; payload: { id: string } }
+  | { type: 'DELETE_MEMBERS'; payload: { ids: string[] } }
   | { type: 'IMPORT_MEMBERS'; payload: TeamMember[] }
   | { type: 'SET_CONTRIBUTION_PERCENT'; payload: { taskId: string; memberId: string; contributionPercent: number } }
   | { type: 'SET_CONTRIBUTION_GRADE'; payload: { taskId: string; memberId: string; personalPerformanceGrade: PerformanceGrade } }
@@ -137,6 +139,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, tasks, contributions: syncAutoDistribution(tasks, state.members, contributions) }
     }
 
+    case 'DELETE_TASKS': {
+      const ids = new Set(action.payload.ids)
+      const tasks = state.tasks.filter((task) => !ids.has(task.id))
+      const contributions = state.contributions.filter((contribution) => !ids.has(contribution.taskId))
+      const peerReviews = state.peerReviews.filter((review) => !ids.has(review.taskId))
+      return { ...state, tasks, peerReviews, contributions: syncAutoDistribution(tasks, state.members, contributions) }
+    }
+
     case 'IMPORT_TASKS':
       return {
         ...state,
@@ -160,6 +170,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const contributions = state.contributions.filter((c) => c.memberId !== action.payload.id)
       const meetingNotes = state.meetingNotes.filter((n) => n.memberId !== action.payload.id)
       const peerReviews = state.peerReviews.filter((r) => r.targetMemberId !== action.payload.id)
+      return {
+        ...state,
+        members,
+        meetingNotes,
+        peerReviews,
+        contributions: syncAutoDistribution(state.tasks, members, contributions),
+      }
+    }
+
+    case 'DELETE_MEMBERS': {
+      const ids = new Set(action.payload.ids)
+      const members = state.members.filter((member) => !ids.has(member.id))
+      const contributions = state.contributions.filter((contribution) => !ids.has(contribution.memberId))
+      const meetingNotes = state.meetingNotes.filter((note) => !ids.has(note.memberId))
+      const peerReviews = state.peerReviews.filter((review) => !ids.has(review.targetMemberId))
       return {
         ...state,
         members,

@@ -33,6 +33,8 @@ export default function TaskManagement() {
   const [importResult, setImportResult] = useState<TaskImportResult | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set())
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const hasTasks = state.tasks.length > 0
 
@@ -65,8 +67,29 @@ export default function TaskManagement() {
   function handleDeleteConfirm() {
     if (deletingTask) {
       dispatch({ type: 'DELETE_TASK', payload: { id: deletingTask.id } })
+      setSelectedTaskIds((current) => new Set(Array.from(current).filter((id) => id !== deletingTask.id)))
       setDeletingTask(null)
     }
+  }
+
+  function toggleTaskSelection(id: string) {
+    setSelectedTaskIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllTasks() {
+    setSelectedTaskIds((current) => current.size === state.tasks.length ? new Set() : new Set(state.tasks.map((task) => task.id)))
+  }
+
+  function handleBulkDeleteConfirm() {
+    dispatch({ type: 'DELETE_TASKS', payload: { ids: Array.from(selectedTaskIds) } })
+    setRecentlyAddedIds((current) => new Set(Array.from(current).filter((id) => !selectedTaskIds.has(id))))
+    setSelectedTaskIds(new Set())
+    setBulkDeleteOpen(false)
   }
 
   async function importTaskFile(file: File | undefined) {
@@ -76,6 +99,7 @@ export default function TaskManagement() {
     dispatch({ type: 'IMPORT_TASKS', payload: result.tasks })
     setImportResult(result)
     setRecentlyAddedIds(new Set(result.addedIds))
+    setSelectedTaskIds(new Set())
     setUploadOpen(false)
   }
 
@@ -113,10 +137,13 @@ export default function TaskManagement() {
       )}
 
       {hasTasks ? (
+      <div>
+      {selectedTaskIds.size > 0 && <div className="mb-3 flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3"><p className="text-sm font-medium text-orange-800">과제 {selectedTaskIds.size}개 선택됨</p><button type="button" onClick={() => setBulkDeleteOpen(true)} className="ui-button ui-button-danger ui-button-sm">선택 과제 삭제</button></div>}
       <div className="ui-table-wrap">
         <table className="ui-table min-w-[820px]">
           <thead>
             <tr>
+              <th className="w-12 px-3 py-3 text-center"><input type="checkbox" aria-label="과제 전체 선택" checked={selectedTaskIds.size === state.tasks.length} onChange={toggleAllTasks} /></th>
               <th className="px-4 py-3 font-semibold">과제명</th>
               <th className="px-4 py-3 font-semibold">과제등급</th>
               <th className="px-4 py-3 font-semibold">성과등급</th>
@@ -129,6 +156,7 @@ export default function TaskManagement() {
           <tbody>
             {state.tasks.map((task) => editingTaskId === task.id ? (
               <tr key={task.id} className="border-t border-gray-200 bg-orange-50/30 text-black">
+                <td className="px-3 py-2 text-center"><input type="checkbox" aria-label={`${task.name} 선택`} checked={selectedTaskIds.has(task.id)} onChange={() => toggleTaskSelection(task.id)} /></td>
                 <td className="px-3 py-2"><input value={editForm.name} onChange={(event) => setEditForm((form) => ({ ...form, name: event.target.value }))} className="ui-field ui-field-sm" />{editFormError && <p className="mt-1 text-xs text-danger">{editFormError}</p>}</td>
                 <td className="px-3 py-2"><select value={editForm.importance} disabled={state.criteria.taskGradeWeight === 0} onChange={(event) => setEditForm((form) => ({ ...form, importance: event.target.value as Importance }))} className="ui-field ui-field-sm disabled:bg-gray-100">{IMPORTANCE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></td>
                 <td className="px-3 py-2"><select value={editForm.performanceGrade} disabled={state.criteria.performanceGradeWeight === 0} onChange={(event) => setEditForm((form) => ({ ...form, performanceGrade: event.target.value as PerformanceGrade }))} className="ui-field ui-field-sm disabled:bg-gray-100">{PERFORMANCE_GRADE_OPTIONS.map((value) => <option key={value}>{value}</option>)}</select></td>
@@ -139,6 +167,7 @@ export default function TaskManagement() {
               </tr>
             ) : (
               <tr key={task.id} className="border-t border-gray-200 text-black">
+                <td className="px-3 py-3 text-center"><input type="checkbox" aria-label={`${task.name} 선택`} checked={selectedTaskIds.has(task.id)} onChange={() => toggleTaskSelection(task.id)} /></td>
                 <td className="px-4 py-3 font-medium">
                   <span className="inline-flex items-center gap-1.5">
                     {task.name}
@@ -173,6 +202,7 @@ export default function TaskManagement() {
           </tbody>
         </table>
       </div>
+      </div>
       ) : null}
 
       <section className="rounded-lg border border-gray-200 bg-white p-4" aria-label="과제 추가">
@@ -194,6 +224,13 @@ export default function TaskManagement() {
         message={`'${deletingTask?.name}' 과제를 삭제하시겠습니까? 관련된 기여도 데이터도 함께 삭제됩니다.`}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingTask(null)}
+      />
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title="선택 과제 삭제"
+        message={`선택한 과제 ${selectedTaskIds.size}개를 삭제하시겠습니까? 해당 과제의 기여도와 피어리뷰 데이터도 함께 삭제됩니다.`}
+        onConfirm={handleBulkDeleteConfirm}
+        onCancel={() => setBulkDeleteOpen(false)}
       />
     </div>
     </CriteriaWorkspaceLayout>
