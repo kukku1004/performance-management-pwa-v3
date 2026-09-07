@@ -674,7 +674,7 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
       return
     }
     if (levelRaw && !LEVEL_OPTIONS.includes(levelRaw as Level)) {
-      errors.push(`${rowNum}행 '${name}': 직급 '${levelRaw}'은(는) 유효하지 않습니다. (사원/대리/과장/차장)`)
+      errors.push(`${rowNum}행 '${name}': 직급 '${levelRaw}'은(는) 유효하지 않습니다. (사원/대리/과장/차장/부장)`)
       return
     }
     const yearsOfService = yearsRaw === '' || yearsRaw === undefined ? null : Number(yearsRaw)

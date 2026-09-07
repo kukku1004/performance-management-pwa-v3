@@ -45,7 +45,7 @@ export function getDefaultGrowthProfile(memberId: string): MemberGrowthProfile {
   return { memberId, promotionReviewDate: '', promotionTargetScore: 50, growthMemo: '', personalNotes: [], positionYears: 5, performanceHistory: [], auxiliaryMetrics: { position: 0, rewardPenalty: 0, tenure: 0, education: 0 } }
 }
 
-export const PROMOTION_RULES: Record<Level, { next: string; years: number; target: number }> = {
+export const PROMOTION_RULES: Record<Exclude<Level, '부장'>, { next: Level; years: number; target: number }> = {
   사원: { next: '대리', years: 3, target: 36 },
   대리: { next: '과장', years: 4, target: 50 },
   과장: { next: '차장', years: 5, target: 66 },
@@ -76,7 +76,7 @@ export function mergeProjectHistoryForSimulation(history: MemberEvaluationHistor
 }
 
 export function calculatePromotionSimulation(history: MemberEvaluationHistory[], profile: MemberGrowthProfile, level: Level | '') {
-  const rule = level ? PROMOTION_RULES[level] : { next: '-', years: 5, target: profile.promotionTargetScore || 50 }
+  const rule = level && level !== '부장' ? PROMOTION_RULES[level] : { next: '-', years: 5, target: profile.promotionTargetScore || 50 }
   const years = getPromotionYears(profile.promotionReviewDate)
   const records = mergeProjectHistoryForSimulation(history, profile.performanceHistory)
   const byYear = new Map(records.map((item) => [item.year, item]))
@@ -98,7 +98,7 @@ export function calculatePromotionSimulation(history: MemberEvaluationHistory[],
     currentScore,
     targetScore,
     neededScore,
-    canPromote: rows.some((row) => row.firstHalf || row.secondHalf || row.competency) && neededScore === 0,
+    canPromote: rule.next !== '-' && rows.some((row) => row.firstHalf || row.secondHalf || row.competency) && neededScore === 0,
     rows,
     auxiliaryScore,
     nextLevel: rule.next,

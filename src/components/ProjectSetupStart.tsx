@@ -260,7 +260,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
           }
           const document = parsed.document
           if (!members.some((member) => normalizedName(member.name) === normalizedName(document.memberName))) {
-            const supportedLevel = ['사원', '대리', '과장', '차장'].includes(document.level) ? document.level as TeamMember['level'] : ''
+            const supportedLevel = ['사원', '대리', '과장', '차장', '부장'].includes(document.level) ? document.level as TeamMember['level'] : ''
             members = [...members, { id: uuidv4(), name: document.memberName, active: true, position: '', level: supportedLevel, yearsOfService: null, role: '', comment: '' }]
             memberCount += 1
             summary.memberCount += 1
