@@ -7,7 +7,6 @@ import { applyMemberTenure, auxiliaryMetricsFromPersonnelRecord, calculatePromot
 import PromotionCriteriaDialog from './PromotionCriteriaDialog'
 import { PanelToggleIcon } from './PanelControls'
 
-const PERFORMANCE_USABLE_MIN_WIDTH = 420
 const SIMULATION_AUTO_COLLAPSE_WIDTH = 360
 const SIMULATION_POPUP_TOP = 142
 
@@ -43,7 +42,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
     const width = Math.min(criteriaOpen ? 1240 : 560, window.innerWidth - 48)
     setSimulationPopupPosition({ x: Math.max(24, window.innerWidth - width - 24), y: Math.min(SIMULATION_POPUP_TOP, Math.max(16, window.innerHeight - 160)) })
   }, [criteriaOpen])
-  useEffect(() => onPanelMinimizedChange?.(simulationPanelMinimized && performancePanelMinimized), [onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
+  useEffect(() => onPanelMinimizedChange?.(performancePanelMinimized), [onPanelMinimizedChange, performancePanelMinimized])
   useEffect(() => {
     const element = panelRef.current
     if (!element) return
@@ -56,18 +55,6 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
     observer.observe(element)
     return () => observer.disconnect()
   }, [collapsedContent])
-  useEffect(() => {
-    const element = performancePanelRef.current
-    if (!element || !collapsedContent) return
-    const update = () => {
-      const width = element.getBoundingClientRect().width
-      if (!performancePanelMinimized && width > 0 && width < PERFORMANCE_USABLE_MIN_WIDTH && Date.now() > manualExpandUntilRef.current) setPerformancePanelMinimized(true)
-    }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [collapsedContent, performancePanelMinimized])
   const history = useMemo(() => activeTeam ? getMemberEvaluationHistory(workspace, activeTeam.id, member.id) : [], [activeTeam, member.id, workspace])
   const hasManagedTenure = member.yearsOfService !== null && Number.isFinite(member.yearsOfService)
   const hasTenureOverride = profile.auxiliaryMetrics?.tenureOverridden === true
@@ -184,10 +171,10 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
           </div>{criteriaOpen && <PromotionCriteriaDialog embedded level={member.level} onClose={() => setCriteriaOpen(false)} />}</div>
           </>}
         </div>
-        {collapsedContent && showPerformancePanel && <div ref={performancePanelRef} className={`flex-1 overflow-hidden bg-slate-50 ${performancePanelMinimized ? 'min-w-0 px-1 py-3' : `min-w-[420px] px-5 ${removeTopSpacing ? 'pt-0' : 'pt-6'}`}`}>{performancePanelMinimized ? <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setPerformancePanelMinimized(false) }} title="성과 영역 복원" aria-label="성과 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="whitespace-nowrap text-xs font-semibold">성과</span></button> : <><div className="mb-3 flex items-center justify-between"><h3 className="ui-section-title">성과</h3><button type="button" onClick={() => setPerformancePanelMinimized(true)} title="성과 영역 최소화" aria-label="성과 영역 최소화" className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0"><PanelToggleIcon collapsed={false} edge={simulationOnRight ? 'left' : 'right'} /></button></div>{collapsedContent}</>}</div>}
+        {collapsedContent && showPerformancePanel && <div ref={performancePanelRef} className={`min-w-0 flex-1 overflow-hidden bg-slate-50 ${performancePanelMinimized ? 'px-1 py-3' : `px-5 ${removeTopSpacing ? 'pt-0' : 'pt-6'}`}`}>{performancePanelMinimized ? <button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setPerformancePanelMinimized(false) }} title="성과 영역 복원" aria-label="성과 영역 복원" className="flex w-full flex-col items-center gap-3 py-2 text-slate-500 hover:text-slate-950"><PanelToggleIcon collapsed edge="right" className="h-4 w-4"/><span className="whitespace-nowrap text-xs font-semibold">성과</span></button> : <><div className="mb-3 flex items-center justify-between"><h3 className="ui-section-title">성과</h3><button type="button" onClick={() => setPerformancePanelMinimized(true)} title="성과 영역 최소화" aria-label="성과 영역 최소화" className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0"><PanelToggleIcon collapsed={false} edge={simulationOnRight ? 'left' : 'right'} /></button></div>{collapsedContent}</>}</div>}
       </div>
       </section>
-    {collapsedContent && simulationTriggerContainerId && typeof document !== 'undefined' && document.getElementById(simulationTriggerContainerId) ? createPortal(<button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; if (simulationPanelMinimized) setPerformancePanelMinimized(false); setSimulationPanelMinimized((value) => !value) }} title={simulationPanelMinimized ? '승진 시뮬레이션 열기' : '승진 시뮬레이션 닫기'} aria-label={simulationPanelMinimized ? '승진 시뮬레이션 열기' : '승진 시뮬레이션 닫기'} className="flex h-11 w-11 items-center justify-center rounded-xl border border-orange-200 bg-orange-50 text-orange-600 transition hover:border-orange-300 hover:bg-orange-100"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17l5-5 3 3 6-7"/><path d="M14 8h5v5"/><path d="M5 6h.01M8 4h.01M4 10h.01"/></svg></button>, document.getElementById(simulationTriggerContainerId)!) : null}
+    {collapsedContent && simulationTriggerContainerId && typeof document !== 'undefined' && document.getElementById(simulationTriggerContainerId) ? createPortal(<button type="button" onClick={() => { manualExpandUntilRef.current = Date.now() + 800; setSimulationPanelMinimized((value) => !value) }} title={simulationPanelMinimized ? '승진 시뮬레이션 열기' : '승진 시뮬레이션 닫기'} aria-label={simulationPanelMinimized ? '승진 시뮬레이션 열기' : '승진 시뮬레이션 닫기'} className="flex h-11 w-11 items-center justify-center rounded-xl border border-orange-200 bg-orange-50 text-orange-600 transition hover:border-orange-300 hover:bg-orange-100"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17l5-5 3 3 6-7"/><path d="M14 8h5v5"/><path d="M5 6h.01M8 4h.01M4 10h.01"/></svg></button>, document.getElementById(simulationTriggerContainerId)!) : null}
     </>
   )
 }

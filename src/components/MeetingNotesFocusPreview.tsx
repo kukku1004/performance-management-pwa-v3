@@ -68,7 +68,7 @@ function MoodGlyph({ value, className = 'h-6 w-6' }: { value?: string; className
   return <img src={mood.asset} alt="" className={`${className} block`} />
 }
 const DOCUMENT_USABLE_MIN_WIDTH = 620
-const REFERENCE_USABLE_MIN_WIDTH = 420
+const REFERENCE_USABLE_MIN_WIDTH = 150
 const CALENDAR_RAIL_MIN_WIDTH = 120
 const HISTORY_RAIL_WIDTH = 56
 
@@ -91,7 +91,7 @@ export default function MeetingNotesFocusPreview({
   const [historyImportOpen, setHistoryImportOpen] = useState(false)
   const [commentToDelete, setCommentToDelete] = useState<{ recordId: string; commentIndex: number } | null>(null)
   const layoutRef = useRef<HTMLDivElement>(null)
-  const [referenceWidth, setReferenceWidth] = useState(() => Math.min(520, Math.max(REFERENCE_USABLE_MIN_WIDTH, window.innerWidth * 0.26)))
+  const [referenceWidth, setReferenceWidth] = useState(() => Math.min(520, Math.max(360, window.innerWidth * 0.26)))
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
   const loadedNote = selectedNoteId ? notes.find((note) => note.id === selectedNoteId) ?? null : null
   const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId) ?? getDefaultGrowthProfile(selectedMemberId)
