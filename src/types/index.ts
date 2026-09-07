@@ -164,6 +164,28 @@ export interface MemberGrowthProfile {
   positionYears?: number
   performanceHistory?: GrowthPerformanceRecord[]
   auxiliaryMetrics?: GrowthAuxiliaryMetrics
+  importedPerformanceDocuments?: ImportedPerformanceDocument[]
+}
+
+export interface ImportedPerformanceTask {
+  name: string
+  weightPercent: number | null
+  grade: EvaluationGrade | null
+}
+
+export interface ImportedPerformanceDocument {
+  id: string
+  fileName: string
+  importedAt: string
+  year: number
+  half: 'first' | 'second' | 'annual'
+  periodLabel: string
+  memberName: string
+  teamName: string
+  level: string
+  finalGrade: EvaluationGrade | null
+  tasks: ImportedPerformanceTask[]
+  comments: string[]
 }
 
 export interface MemberPersonalNote {

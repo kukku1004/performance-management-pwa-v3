@@ -14,6 +14,7 @@ import {
   type QuickStartTemplateKind,
 } from '../utils/excel'
 import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/growthExcel'
+import { mergePerformancePdfIntoGrowthProfiles, parsePerformancePdf, performanceDocumentMatchesPeriod, type PerformancePdfParseResult } from '../utils/performancePdf'
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
@@ -55,6 +56,7 @@ interface ExcelUploadAccumulator {
   memberCount: number
   growthMemberCount: number
   peerReviewCount: number
+  performancePdfCount: number
   errorCount: number
 }
 
@@ -64,6 +66,10 @@ function namesFromText(value: string) {
 
 function normalizedName(value: string) {
   return value.normalize('NFC').trim()
+}
+
+function normalizedTaskName(value: string) {
+  return normalizedName(value).replace(/\s+/g, '').toLowerCase()
 }
 
 function mergeNames(current: string[], additions: string[]) {
@@ -173,7 +179,8 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
     let peerReviewCount = 0
     let growthMemberCount = 0
     const errors: string[] = []
-    const loadedFiles: { file: File; buffer: ArrayBuffer; isPeerReview: boolean }[] = []
+    const loadedFiles: { file: File; buffer: ArrayBuffer; isPeerReview: boolean; isPdf: boolean }[] = []
+    const parsedPdfById = new Map<string, PerformancePdfParseResult>()
     const summaries = new Map<string, ExcelUploadAccumulator>()
 
     const getSummary = (file: File) => {
@@ -187,6 +194,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
         memberCount: 0,
         growthMemberCount: 0,
         peerReviewCount: 0,
+        performancePdfCount: 0,
         errorCount: 0,
       }
       summaries.set(id, next)
@@ -196,22 +204,23 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
     try {
       for (const file of Array.from(files)) {
         const summary = getSummary(file)
-        if (!/\.xlsx?$/i.test(file.name)) {
+        if (!/\.(xlsx?|pdf)$/i.test(file.name)) {
           summary.errorCount += 1
-          errors.push(`${file.name}: Excel 파일만 업로드할 수 있습니다.`)
+          errors.push(`${file.name}: Excel 또는 성과 PDF 파일만 업로드할 수 있습니다.`)
           continue
         }
         try {
           const buffer = await file.arrayBuffer()
-          loadedFiles.push({ file, buffer, isPeerReview: detectManagedWorkbookKind(buffer) === 'peerReviews' })
+          const isPdf = /\.pdf$/i.test(file.name)
+          loadedFiles.push({ file, buffer, isPdf, isPeerReview: !isPdf && detectManagedWorkbookKind(buffer) === 'peerReviews' })
         } catch {
           summary.errorCount += 1
           errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
         }
       }
 
-      for (const { file, buffer, isPeerReview } of loadedFiles) {
-        if (isPeerReview) continue
+      for (const { file, buffer, isPeerReview, isPdf } of loadedFiles) {
+        if (isPeerReview || isPdf) continue
         const summary = getSummary(file)
         try {
           const result = parseQuickStartWorkbook(buffer, tasks, members)
@@ -229,6 +238,41 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
         }
       }
 
+      for (const { file, buffer, isPdf } of loadedFiles) {
+        if (!isPdf) continue
+        const summary = getSummary(file)
+        try {
+          const parsed = await parsePerformancePdf(buffer, file.name, members)
+          parsedPdfById.set(summary.id, parsed)
+          if (!parsed.document) {
+            summary.errorCount += parsed.errors.length || 1
+            errors.push(...parsed.errors.map((error) => `${file.name}: ${error}`))
+            continue
+          }
+          const document = parsed.document
+          if (!members.some((member) => normalizedName(member.name) === normalizedName(document.memberName))) {
+            const supportedLevel = ['사원', '대리', '과장', '차장'].includes(document.level) ? document.level as TeamMember['level'] : ''
+            members = [...members, { id: uuidv4(), name: document.memberName, active: true, position: '', level: supportedLevel, yearsOfService: null, role: '', comment: '' }]
+            memberCount += 1
+            summary.memberCount += 1
+          }
+          if (activeProject && performanceDocumentMatchesPeriod(document, activeProject.period)) {
+            for (const importedTask of document.tasks) {
+              if (tasks.some((task) => normalizedTaskName(task.name) === normalizedTaskName(importedTask.name))) continue
+              tasks = [...tasks, { id: uuidv4(), name: importedTask.name, importance: '일반', performanceGrade: importedTask.grade ?? 'B', workload: '중', objective: '', achievement: '' }]
+              taskCount += 1
+              summary.taskCount += 1
+            }
+          }
+          summary.performancePdfCount += 1
+          summary.errorCount += parsed.errors.length
+          errors.push(...parsed.errors.map((error) => `${file.name}: ${error}`))
+        } catch {
+          summary.errorCount += 1
+          errors.push(`${file.name}: 성과 PDF를 읽을 수 없습니다.`)
+        }
+      }
+
       const knownByName = new Map((activeTeam?.members ?? []).map((member) => [normalizedName(member.name), member]))
       members = members.map((member) => {
         const known = knownByName.get(normalizedName(member.name))
@@ -237,8 +281,8 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
 
       let growthProfiles = activeTeam?.growthProfiles ?? []
       const importedGrowthMembers = new Set<string>()
-      for (const { file, buffer, isPeerReview } of loadedFiles) {
-        if (isPeerReview || !containsGrowthHistoryData(buffer)) continue
+      for (const { file, buffer, isPeerReview, isPdf } of loadedFiles) {
+        if (isPeerReview || isPdf || !containsGrowthHistoryData(buffer)) continue
         const summary = getSummary(file)
         try {
           const result = parseGrowthHistoryWorkbook(buffer, members, growthProfiles)
@@ -252,12 +296,22 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
           errors.push(`${file.name}: 이전 성과 데이터를 읽을 수 없습니다.`)
         }
       }
+      for (const { file, isPdf } of loadedFiles) {
+        if (!isPdf) continue
+        const summary = getSummary(file)
+        const parsed = parsedPdfById.get(summary.id)
+        if (!parsed) continue
+        const result = mergePerformancePdfIntoGrowthProfiles(parsed, members, growthProfiles)
+        growthProfiles = result.profiles
+        result.importedMembers.forEach((name) => importedGrowthMembers.add(name))
+        summary.growthMemberCount += result.importedMembers.length
+      }
       growthMemberCount = importedGrowthMembers.size
 
       let peerReviews = state.peerReviews
       const importContributions = syncAutoDistribution(tasks, members, state.contributions)
-      for (const { file, buffer, isPeerReview } of loadedFiles) {
-        if (isPeerReview) continue
+      for (const { file, buffer, isPeerReview, isPdf } of loadedFiles) {
+        if (isPeerReview || isPdf) continue
         const summary = getSummary(file)
         try {
           const result = parseIntegratedPeerReviewWorkbook(buffer, tasks, members)
@@ -274,8 +328,8 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
           errors.push(`${file.name}: 피어리뷰 데이터를 읽을 수 없습니다.`)
         }
       }
-      for (const { file, buffer, isPeerReview } of loadedFiles) {
-        if (!isPeerReview) continue
+      for (const { file, buffer, isPeerReview, isPdf } of loadedFiles) {
+        if (!isPeerReview || isPdf) continue
         const summary = getSummary(file)
         if (!activeProject) {
           summary.errorCount += 1
@@ -310,6 +364,20 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
       if (memberCount > 0) dispatch({ type: 'IMPORT_MEMBERS', payload: members })
       if (peerReviewFileCount > 0) dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: peerReviews })
       if (growthMemberCount > 0) growthProfiles.forEach((profile) => saveGrowthProfile(profile))
+      if (activeProject) {
+        for (const parsed of parsedPdfById.values()) {
+          const document = parsed.document
+          if (!document || !performanceDocumentMatchesPeriod(document, activeProject.period)) continue
+          const member = members.find((item) => normalizedName(item.name) === normalizedName(document.memberName))
+          if (!member) continue
+          for (const importedTask of document.tasks) {
+            const task = tasks.find((item) => normalizedTaskName(item.name) === normalizedTaskName(importedTask.name))
+            if (!task) continue
+            if (importedTask.grade) dispatch({ type: 'SET_CONTRIBUTION_GRADE', payload: { taskId: task.id, memberId: member.id, personalPerformanceGrade: importedTask.grade } })
+            if (document.comments[0]) dispatch({ type: 'SET_CONTRIBUTION_NOTE', payload: { taskId: task.id, memberId: member.id, evaluationNote: document.comments[0] } })
+          }
+        }
+      }
 
       const results = Array.from(summaries.values()).map<ExcelUploadResult>((summary) => {
         const details = [
@@ -317,8 +385,9 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
           summary.memberCount > 0 ? `팀원 ${summary.memberCount}건` : '',
           summary.growthMemberCount > 0 ? `이전 성과 ${summary.growthMemberCount}명` : '',
           summary.peerReviewCount > 0 ? `피어리뷰 ${summary.peerReviewCount}건` : '',
+          summary.performancePdfCount > 0 ? `성과 PDF ${summary.performancePdfCount}건` : '',
         ].filter(Boolean)
-        const importedCount = summary.taskCount + summary.memberCount + summary.growthMemberCount + summary.peerReviewCount
+        const importedCount = summary.taskCount + summary.memberCount + summary.growthMemberCount + summary.peerReviewCount + summary.performancePdfCount
         return {
           id: summary.id,
           name: summary.name,
@@ -327,12 +396,13 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
           status: importedCount === 0 ? 'error' : summary.errorCount > 0 ? 'warning' : 'success',
         }
       })
-      const imported = taskCount + memberCount + growthMemberCount + peerReviewCount > 0
+      const performancePdfCount = Array.from(summaries.values()).reduce((sum, item) => sum + item.performancePdfCount, 0)
+      const imported = taskCount + memberCount + growthMemberCount + peerReviewCount + performancePdfCount > 0
     setExcelUploadResults(results)
     setExcelImportComplete(imported)
     setUploadResultsOpen(results.length > 0)
       setMessage(imported
-        ? `과제 ${taskCount}건, 팀원 ${memberCount}건, 이전 성과 ${growthMemberCount}명, 피어리뷰 ${peerReviewCount}건을 가져왔습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`
+        ? `과제 ${taskCount}건, 팀원 ${memberCount}건, 이전 성과 ${growthMemberCount}명, 피어리뷰 ${peerReviewCount}건, 성과 PDF ${performancePdfCount}건을 가져왔습니다.${errors.length ? ` 확인 필요 ${errors.length}건` : ''}`
         : '업로드한 파일에서 가져올 데이터를 찾지 못했습니다.')
     } finally {
       setIsImportingExcel(false)
@@ -486,14 +556,14 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
             </div>
             <div className="min-w-0 border-t border-gray-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <h3 className="ui-section-title">작성한 양식 업로드</h3>
-              <p className="mt-1 text-sm leading-6 text-gray-500">과제·팀원·이전 성과·피어리뷰 파일을 함께 올리면 데이터 종류를 자동으로 구분합니다.</p>
+              <p className="mt-1 text-sm leading-6 text-gray-500">과제·팀원·이전 성과·피어리뷰 Excel과 성과평가 PDF를 함께 올리면 자동으로 구분합니다.</p>
               <FileDropZone
                 className="mt-4 min-h-56"
                 disabled={isImportingExcel}
                 onClick={() => { if (!isImportingExcel) excelInputRef.current?.click() }}
                 onDrop={(event) => { event.preventDefault(); void importExcelFiles(event.dataTransfer.files) }}
                 title={isImportingExcel ? '파일을 확인하고 있습니다…' : '작성한 양식 파일을 여기에 드래그'}
-                description={isImportingExcel ? '데이터 종류와 내용을 확인하는 중입니다.' : '여러 Excel 파일 동시 업로드 가능 (.xlsx)'}
+                description={isImportingExcel ? '데이터 종류와 내용을 확인하는 중입니다.' : 'Excel·성과 PDF 여러 파일 동시 업로드 가능'}
               />
               {!isImportingExcel && excelUploadResults.length === 0 && <p className="mt-3 text-xs leading-5 text-gray-400">드롭 영역을 누르면 파일 선택창이 열립니다.</p>}
               {isImportingExcel && <div className="mt-3 flex items-center gap-2 text-sm text-accent" role="status" aria-live="polite">
@@ -525,7 +595,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
                   ))}
                 </div>
               </aside>}
-              <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
+              <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls,.pdf,application/pdf" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
             </div>
           </section>}
 

@@ -150,6 +150,27 @@ export async function downloadGrowthHistoryTemplate(
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, guide, '안내')
   XLSX.utils.book_append_sheet(wb, ws, '성과입력')
+  const importedDetails = members.flatMap((member) => {
+    const documents = profileByMemberId.get(member.id)?.importedPerformanceDocuments ?? []
+    return documents.flatMap((document) => document.tasks.length > 0
+      ? document.tasks.map((task, index) => [member.name, document.periodLabel, document.finalGrade ?? '', task.name, task.weightPercent ?? '', task.grade ?? '', index === 0 ? document.comments.join('\n') : '', document.fileName])
+      : [[member.name, document.periodLabel, document.finalGrade ?? '', '', '', '', document.comments.join('\n'), document.fileName]])
+  })
+  if (importedDetails.length > 0) {
+    const detailsSheet = XLSX.utils.aoa_to_sheet([
+      ['불러온 성과 PDF 상세'],
+      ['이름', '평가기간', '최종등급', '과제명', '가중치(%)', '과제등급', '평가 코멘트', '원본 파일'],
+      ...importedDetails,
+    ])
+    detailsSheet['!merges'] = [XLSX.utils.decode_range('A1:H1')]
+    detailsSheet['!cols'] = [{ wch: 14 }, { wch: 15 }, { wch: 10 }, { wch: 44 }, { wch: 12 }, { wch: 11 }, { wch: 80 }, { wch: 24 }]
+    styleCell(detailsSheet, 'A1', '111827', 'FFFFFF', true, 'left')
+    for (let column = 0; column < 8; column += 1) styleCell(detailsSheet, XLSX.utils.encode_cell({ r: 1, c: column }), 'F3F4F6', '111827', true)
+    for (let row = 2; row < importedDetails.length + 2; row += 1) {
+      for (let column = 0; column < 8; column += 1) styleCell(detailsSheet, XLSX.utils.encode_cell({ r: row, c: column }), 'FFFFFF', '4B5563', false, 'left')
+    }
+    XLSX.utils.book_append_sheet(wb, detailsSheet, 'PDF성과상세')
+  }
   const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true })
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
   const anchor = document.createElement('a')
