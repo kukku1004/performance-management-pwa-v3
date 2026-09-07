@@ -53,10 +53,24 @@ export default function MeetingNotes() {
     setNewGrowthPoints(EMPTY_GROWTH_POINTS)
   }
 
+  function resetComposer() {
+    setNewDate(todayString())
+    setNewComment('')
+    setNewMood('')
+    setNewGrowthPoints(EMPTY_GROWTH_POINTS)
+    setEditingNoteId(null)
+  }
+
+  function handleSelectMember(memberId: string) {
+    setSelectedMemberId(memberId)
+    resetComposer()
+  }
+
   function updateLoadedNote(note: MeetingNote) {
     if (!newDate || !newComment.trim()) return
     const hasGrowthPoints = Object.values(newGrowthPoints).some((value) => value.trim())
     saveMeetingNote({ ...note, date: newDate, comment: newComment.trim(), mood: newMood || undefined, growthPoints: hasGrowthPoints ? newGrowthPoints : undefined })
+    resetComposer()
   }
 
   function startEdit(note: MeetingNote) {
@@ -81,11 +95,11 @@ export default function MeetingNotes() {
   return <div className="ui-page">
     {members.length === 0 || !selectedMember ? <p className="ui-empty">등록된 팀원이 없습니다. 팀원 관리에서 먼저 팀원을 등록하세요.</p> : <div className="-mt-5 overflow-hidden bg-white">
       <MeetingNotesFocusPreview
-        members={members} selectedMember={selectedMember} selectedMemberId={selectedMemberId} onSelectMember={setSelectedMemberId}
+        members={members} selectedMember={selectedMember} selectedMemberId={selectedMemberId} onSelectMember={handleSelectMember}
         notes={notesForMember} allNotes={meetingNotes} importedCommentNotes={importedCommentNotes.filter((note) => note.memberId === selectedMemberId)} insights={meetingInsights}
         newDate={newDate} newComment={newComment} newMood={newMood} growthPoints={newGrowthPoints}
         onDateChange={setNewDate} onCommentChange={setNewComment} onMoodChange={setNewMood} onGrowthPointsChange={setNewGrowthPoints}
-        onAdd={handleAdd} onUpdateLoaded={updateLoadedNote} onEdit={startEdit}
+        onAdd={handleAdd} onStartNew={resetComposer} onUpdateLoaded={updateLoadedNote} onEdit={startEdit}
         editingNoteId={editingNoteId} editDate={editDate} editComment={editComment} editMood={editMood}
         onEditDateChange={setEditDate} onEditCommentChange={setEditComment} onEditMoodChange={setEditMood}
         onSaveEdit={saveEdit} onCancelEdit={() => setEditingNoteId(null)} onDelete={setDeletingNote} getMemberGrade={getMemberGrade}
