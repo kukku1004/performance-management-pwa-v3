@@ -75,6 +75,9 @@ export default function Navigation({ activeTab, onTabChange, onOpenDataManagemen
               데이터 백업
             </button>
             <Badge tone={saveStatus === 'error' ? 'danger' : saveStatus === 'saved' ? 'success' : 'neutral'}>{saveLabel}</Badge>
+            <a href="./manual/" target="_blank" rel="noreferrer" className="ui-button ui-button-ghost ui-button-sm h-8 w-8 px-0" aria-label="사용 매뉴얼 새 창으로 열기" title="사용 매뉴얼">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11a3 3 0 0 1 3 3v15a3 3 0 0 0-3-3H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H14v18a3 3 0 0 1 3-3h.5a2.5 2.5 0 0 1 2.5 2.5z"/></svg>
+            </a>
             <button type="button" onClick={() => void logout()} className="ui-button ui-button-ghost ui-button-sm">로그아웃</button>
           </div>
       </div>

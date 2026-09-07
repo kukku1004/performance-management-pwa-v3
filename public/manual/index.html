@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>성과·성장관리 V3 사용 매뉴얼</title>
+  <style>
+    :root { color-scheme: light; font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f5f6f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #e2e5ea; background: rgba(255,255,255,.96); backdrop-filter: blur(8px); }
+    .header-inner { display: flex; max-width: 1240px; margin: 0 auto; padding: 16px 24px; align-items: center; justify-content: space-between; gap: 20px; }
+    h1 { margin: 0; font-size: 20px; }
+    .description { margin: 4px 0 0; color: #667085; font-size: 13px; }
+    .close { display: inline-flex; height: 38px; align-items: center; gap: 7px; border: 1px solid #d8dce3; border-radius: 8px; background: #fff; padding: 0 14px; color: #344054; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    main { display: grid; max-width: 1240px; margin: 0 auto; padding: 28px 24px 64px; gap: 24px; }
+    figure { margin: 0; overflow: hidden; border: 1px solid #d8dce3; border-radius: 12px; background: #fff; box-shadow: 0 3px 12px rgba(23,32,51,.05); }
+    img { display: block; width: 100%; height: auto; }
+    .top { position: fixed; right: 24px; bottom: 24px; display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid #fed7aa; border-radius: 12px; background: #fff7ed; color: #ea580c; text-decoration: none; font-size: 20px; box-shadow: 0 5px 18px rgba(23,32,51,.12); }
+    @media (max-width: 700px) { .header-inner { padding: 13px 16px; } h1 { font-size: 17px; } .description { display: none; } main { padding: 16px 10px 48px; gap: 12px; } figure { border-radius: 8px; } }
+  </style>
+</head>
+<body>
+  <header id="top">
+    <div class="header-inner">
+      <div><h1>성과·성장관리 V3 사용 매뉴얼</h1><p class="description">데이터 가져오기부터 평가·성장·면담까지 이미지로 확인하세요.</p></div>
+      <button class="close" type="button" onclick="window.close()" aria-label="매뉴얼 창 닫기">창 닫기</button>
+    </div>
+  </header>
+  <main aria-label="사용 매뉴얼 12페이지">
+    <figure><img src="assets/manual-01.png" alt="성과·성장관리 V3 이미지 중심 사용자 매뉴얼 표지" /></figure>
+    <figure><img src="assets/manual-02.png" alt="데이터 쉽게 가져오기와 정보 우선순위" loading="lazy" /></figure>
+    <figure><img src="assets/manual-03.png" alt="평가 리포트 PDF 받기 - 팀원 목록" loading="lazy" /></figure>
+    <figure><img src="assets/manual-04.png" alt="평가 리포트 PDF 저장 방법" loading="lazy" /></figure>
+    <figure><img src="assets/manual-05.png" alt="평가 PDF를 먼저 사용하는 이유" loading="lazy" /></figure>
+    <figure><img src="assets/manual-06.png" alt="팀원 인사정보 Excel 받기" loading="lazy" /></figure>
+    <figure><img src="assets/manual-07.png" alt="인사기록카드를 Excel로 저장하는 방법" loading="lazy" /></figure>
+    <figure><img src="assets/manual-08.png" alt="앱에 여러 파일을 한 번에 올리는 방법" loading="lazy" /></figure>
+    <figure><img src="assets/manual-09.png" alt="가져온 데이터가 적용되는 화면" loading="lazy" /></figure>
+    <figure><img src="assets/manual-10.png" alt="평가 업무 진행 순서" loading="lazy" /></figure>
+    <figure><img src="assets/manual-11.png" alt="팀원 성장과 면담 업무 진행 순서" loading="lazy" /></figure>
+    <figure><img src="assets/manual-12.png" alt="업로드 전 확인사항" loading="lazy" /></figure>
+  </main>
+  <a class="top" href="#top" aria-label="맨 위로 이동" title="맨 위로">↑</a>
+</body>
+</html>
