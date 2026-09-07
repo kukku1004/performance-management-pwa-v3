@@ -210,6 +210,7 @@ export interface GrowthAuxiliaryMetrics {
   position: number
   rewardPenalty: number
   tenure: number
+  tenureOverridden?: boolean
   education: number
 }
 
