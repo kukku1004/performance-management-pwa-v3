@@ -14,7 +14,7 @@ import {
   type QuickStartTemplateKind,
 } from '../utils/excel'
 import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/growthExcel'
-import { mergePerformancePdfIntoGrowthProfiles, parsePerformancePdf, type PerformancePdfParseResult } from '../utils/performancePdf'
+import { mergePerformancePdfIntoGrowthProfiles, parsePerformancePdf, performanceDocumentMatchesPeriod, type PerformancePdfParseResult } from '../utils/performancePdf'
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
@@ -73,6 +73,10 @@ function namesFromText(value: string) {
 
 function normalizedName(value: string) {
   return value.normalize('NFC').trim()
+}
+
+function normalizedTaskName(value: string) {
+  return normalizedName(value).replace(/\s+/g, ' ')
 }
 
 function mergeNames(current: string[], additions: string[]) {
@@ -276,6 +280,46 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
         return known ? { ...member, id: known.id } : member
       })
 
+      const pdfTaskOwners = new Map<string, Set<string>>()
+      const pdfTaskGrades = new Map<string, Map<string, NonNullable<ImportedPerformanceDocument['finalGrade']>>>()
+      if (activeProject) {
+        const taskByName = new Map(tasks.map((task) => [normalizedTaskName(task.name), task]))
+        for (const [summaryId, parsed] of parsedPdfById) {
+          const document = parsed.document
+          if (!document || !performanceDocumentMatchesPeriod(document, activeProject.period)) continue
+          const member = members.find((item) => normalizedName(item.name) === normalizedName(document.memberName))
+          if (!member) continue
+          const summary = summaries.get(summaryId)
+          for (const performanceTask of document.tasks) {
+            const key = normalizedTaskName(performanceTask.name)
+            let task = taskByName.get(key)
+            if (!task) {
+              task = {
+                id: uuidv4(),
+                name: performanceTask.name,
+                importance: '일반',
+                performanceGrade: performanceTask.grade ?? 'B',
+                workload: '중',
+                objective: '',
+                achievement: '',
+              }
+              tasks = [...tasks, task]
+              taskByName.set(key, task)
+              taskCount += 1
+              if (summary) summary.taskCount += 1
+            }
+            const owners = pdfTaskOwners.get(task.id) ?? new Set<string>()
+            owners.add(member.id)
+            pdfTaskOwners.set(task.id, owners)
+            if (performanceTask.grade) {
+              const grades = pdfTaskGrades.get(task.id) ?? new Map<string, NonNullable<ImportedPerformanceDocument['finalGrade']>>()
+              grades.set(member.id, performanceTask.grade)
+              pdfTaskGrades.set(task.id, grades)
+            }
+          }
+        }
+      }
+
       let growthProfiles = activeTeam?.growthProfiles ?? []
       const importedGrowthMembers = new Set<string>()
       for (const { file, buffer, isPeerReview, isPdf } of loadedFiles) {
@@ -359,6 +403,16 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
 
       if (taskCount > 0) dispatch({ type: 'IMPORT_TASKS', payload: tasks })
       if (memberCount > 0) dispatch({ type: 'IMPORT_MEMBERS', payload: members })
+      for (const [taskId, owners] of pdfTaskOwners) {
+        const ownerPercent = Math.floor(100 / owners.size)
+        let remainder = 100 - ownerPercent * owners.size
+        for (const member of members.filter((item) => item.active !== false)) {
+          const contributionPercent = owners.has(member.id) ? ownerPercent + (remainder-- > 0 ? 1 : 0) : 0
+          dispatch({ type: 'SET_CONTRIBUTION_PERCENT', payload: { taskId, memberId: member.id, contributionPercent } })
+          const grade = pdfTaskGrades.get(taskId)?.get(member.id)
+          if (grade) dispatch({ type: 'SET_CONTRIBUTION_GRADE', payload: { taskId, memberId: member.id, personalPerformanceGrade: grade } })
+        }
+      }
       if (peerReviewFileCount > 0) dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: peerReviews })
       if (growthMemberCount > 0) growthProfiles.forEach((profile) => saveGrowthProfile(profile))
       setPendingPdfComments(Array.from(parsedPdfById.values()).flatMap((parsed) => {

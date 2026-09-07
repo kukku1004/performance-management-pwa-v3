@@ -213,6 +213,11 @@ export function performanceDocumentMatchesPeriod(document: ImportedPerformanceDo
   if (document.year !== period.year) return false
   if (period.type === 'annual') return document.half === 'annual'
   if (period.type !== 'half') return false
-  const value = period.value.toLowerCase()
-  return document.half === 'first' ? /상|first|h1|1/.test(value) : /하|second|h2|2/.test(value)
+  const value = period.value.toLowerCase().replace(/\s+/g, '')
+  const half = /상반기|first|h1/.test(value) || value === '1'
+    ? 'first'
+    : /하반기|second|h2/.test(value) || value === '2'
+      ? 'second'
+      : null
+  return document.half === half
 }
