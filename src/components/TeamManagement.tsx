@@ -115,22 +115,25 @@ export default function TeamManagement() {
 
       {(!hasMembers || uploadOpen) && <FileDropZone
         title={hasMembers ? '팀원 Excel 파일을 여기에 드래그' : '등록된 팀원이 없습니다.'}
-        description={hasMembers ? '이름·직책·직급·연차·역할·코멘트를 현재 평가의 팀원 정보에 반영합니다.' : '아래 입력 영역에서 직접 등록할 수 있습니다.\n또는\n이 영역을 클릭하거나 파일을 드래그하여 한 번에 등록할 수 있습니다.'}
+        description={hasMembers ? '팀원 양식 또는 종합 인사기록카드(.xls)를 올리면 기본정보와 발령·교육·경력·포상이력을 연결합니다.' : '아래 입력 영역에서 직접 등록할 수 있습니다.\n또는\n팀원 양식이나 종합 인사기록카드를 드래그하여 등록할 수 있습니다.'}
         onClick={() => fileInputRef.current?.click()}
         onDrop={(event) => { event.preventDefault(); void importMemberFile(event.dataTransfer.files[0]) }}
         className={!hasMembers ? 'cursor-pointer bg-gray-50 hover:border-orange-300 hover:bg-orange-50/30' : 'cursor-pointer'}
       />}
 
       {importResult && (
-        <ImportFeedback
-          addedCount={importResult.addedCount}
-          updatedCount={importResult.updatedCount}
-          errors={importResult.errors}
-          onDismiss={() => {
-            setImportResult(null)
-            setRecentlyAddedIds(new Set())
-          }}
-        />
+        <div>
+          {importResult.sourceType === 'personnel-record' && <p className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">인사기록카드를 인식했습니다. 기본정보와 성장 이력 {importResult.importedHistoryCount ?? 0}건을 반영했으며, 주소·연락처·주민번호·가족정보는 가져오지 않았습니다.</p>}
+          <ImportFeedback
+            addedCount={importResult.addedCount}
+            updatedCount={importResult.updatedCount}
+            errors={importResult.errors}
+            onDismiss={() => {
+              setImportResult(null)
+              setRecentlyAddedIds(new Set())
+            }}
+          />
+        </div>
       )}
 
       {hasMembers ? (
@@ -173,7 +176,7 @@ export default function TeamManagement() {
                     </span>
                   </td>
                   <td className="px-4 py-3">{member.position || '-'}</td>
-                  <td className="px-4 py-3">{member.level || '-'}</td>
+                  <td className="px-4 py-3">{member.level || member.personnelRecord?.employeeGrade || member.personnelRecord?.jobTitle || '-'}</td>
                   <td className="px-4 py-3">{member.yearsOfService ?? '-'}</td>
                   <td className="px-4 py-3">{member.role || '-'}</td>
                   <td className="px-4 py-3">{count}건</td>

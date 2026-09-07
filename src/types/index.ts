@@ -24,6 +24,57 @@ export interface TeamMember {
   yearsOfService: number | null
   role: string
   comment: string
+  personnelRecord?: PersonnelRecord
+}
+
+export interface PersonnelAppointment {
+  date: string
+  type: string
+  company: string
+  department: string
+  employmentType: string
+  jobTitle: string
+  position: string
+  workplace: string
+}
+
+export interface PersonnelEducation {
+  startDate: string
+  endDate: string
+  courseName: string
+  score: string
+}
+
+export interface PersonnelCareer {
+  startDate: string
+  endDate: string
+  duration: string
+  company: string
+  jobTitle: string
+  duty: string
+}
+
+export interface PersonnelAward {
+  date: string
+  organization: string
+  name: string
+  reason: string
+}
+
+export interface PersonnelRecord {
+  employeeNumber: string
+  company: string
+  department: string
+  hireDate: string
+  lastPromotionDate: string
+  employeeGrade: string
+  jobTitle: string
+  duty: string
+  appointments: PersonnelAppointment[]
+  education: PersonnelEducation[]
+  careers: PersonnelCareer[]
+  awards: PersonnelAward[]
+  importedAt: string
 }
 
 export interface Contribution {

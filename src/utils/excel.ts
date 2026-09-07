@@ -533,9 +533,116 @@ export interface MemberImportResult {
   addedCount: number
   updatedCount: number
   addedIds: string[]
+  sourceType?: 'member-template' | 'personnel-record'
+  importedHistoryCount?: number
+}
+
+function compactPersonnelLabel(value: unknown) {
+  return String(value ?? '').normalize('NFC').replace(/\s+/g, '').trim()
+}
+
+function personnelDate(value: unknown) {
+  const match = String(value ?? '').match(/(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})/)
+  return match ? `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}` : ''
+}
+
+function personnelMonth(value: unknown) {
+  const match = String(value ?? '').match(/(\d{4})[.\/-](\d{1,2})/)
+  return match ? `${match[1]}-${match[2].padStart(2, '0')}` : ''
+}
+
+function valueAfterPersonnelLabel(rows: unknown[][], label: string) {
+  const wanted = compactPersonnelLabel(label)
+  for (const row of rows) {
+    const index = row.findIndex((value) => compactPersonnelLabel(value) === wanted)
+    if (index < 0) continue
+    const value = row.slice(index + 1).find((item) => String(item ?? '').trim())
+    if (value !== undefined) return String(value).trim()
+  }
+  return ''
+}
+
+function parsePersonnelRecordWorkbook(buffer: ArrayBuffer, existingMembers: TeamMember[]): MemberImportResult | null {
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  if (!sheet) return null
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
+  if (!rows.slice(0, 8).flat().some((value) => compactPersonnelLabel(value).includes('종합인사기록카드'))) return null
+
+  const employeeRow = rows.find((row) => row.some((value) => compactPersonnelLabel(value) === '사번')) ?? []
+  const employeeLabelIndex = employeeRow.findIndex((value) => compactPersonnelLabel(value) === '사번')
+  const name = employeeRow.slice(0, employeeLabelIndex).map((value) => String(value ?? '').trim()).find(Boolean) ?? ''
+  if (!name) return { members: existingMembers, errors: ['인사기록카드에서 이름을 찾지 못했습니다.'], importedCount: 0, addedCount: 0, updatedCount: 0, addedIds: [], sourceType: 'personnel-record', importedHistoryCount: 0 }
+
+  const appointments = rows.flatMap((row) => {
+    const date = personnelDate(row[0])
+    const type = String(row[4] ?? '').trim()
+    if (!date || !type || compactPersonnelLabel(type) === '발령종류') return []
+    return [{ date, type, company: String(row[12] ?? '').trim(), department: String(row[18] ?? '').trim(), employmentType: String(row[25] ?? '').trim(), jobTitle: String(row[33] ?? '').trim(), position: String(row[39] ?? '').trim(), workplace: String(row[46] ?? '').trim() }]
+  })
+  const education = rows.flatMap((row) => {
+    const startDate = personnelDate(row[28])
+    const courseName = String(row[39] ?? '').trim()
+    if (!startDate || !courseName || compactPersonnelLabel(courseName) === '과정명') return []
+    return [{ startDate, endDate: personnelDate(row[35]) || startDate, courseName, score: String(row[52] ?? '').trim() }]
+  })
+  const careerHeader = rows.findIndex((row) => row.some((value) => compactPersonnelLabel(value) === '경력사항'))
+  const careerEnd = rows.findIndex((row, index) => index > careerHeader && row.some((value) => compactPersonnelLabel(value) === '자격사항'))
+  const careers = rows.slice(Math.max(0, careerHeader + 2), careerEnd < 0 ? rows.length : careerEnd).flatMap((row) => {
+    const startDate = personnelMonth(row[0])
+    const company = String(row[14] ?? '').trim()
+    if (!startDate || !company) return []
+    return [{ startDate, endDate: personnelMonth(row[2]), duration: String(row[8] ?? '').trim(), company, jobTitle: String(row[22] ?? '').trim(), duty: String(row[26] ?? '').trim() }]
+  })
+  const awards = rows.flatMap((row) => {
+    const date = personnelDate(row[3])
+    const nameValue = String(row[16] ?? '').trim()
+    if (!date || !nameValue || compactPersonnelLabel(nameValue) === '포상명') return []
+    return [{ date, organization: String(row[9] ?? '').trim(), name: nameValue, reason: String(row[24] ?? '').trim() }]
+  })
+  const hireDate = personnelDate(valueAfterPersonnelLabel(rows, '당사입사'))
+  const latestAppointment = appointments[0]
+  const currentDuty = rows.map((row) => ({ startDate: personnelDate(row[34]), duty: String(row[39] ?? '').trim() })).find((item) => item.startDate && item.duty)?.duty ?? ''
+  const yearsOfService = hireDate ? Math.max(0, Math.round(((Date.now() - new Date(`${hireDate}T00:00:00`).getTime()) / 31_557_600_000) * 10) / 10) : null
+  const currentPosition = valueAfterPersonnelLabel(rows, '직책')
+  const existing = existingMembers.find((member) => member.name.normalize('NFC').trim() === name.normalize('NFC').trim())
+  const member: TeamMember = {
+    ...(existing ?? { id: uuidv4(), name, active: true, position: '', level: '', yearsOfService: null, role: '', comment: '' }),
+    name,
+    position: existing?.position || (POSITION_OPTIONS.includes(currentPosition as Position) ? currentPosition as Position : ''),
+    yearsOfService: existing?.yearsOfService ?? yearsOfService,
+    role: existing?.role || currentDuty,
+    personnelRecord: {
+      employeeNumber: valueAfterPersonnelLabel(rows, '사번'),
+      company: valueAfterPersonnelLabel(rows, '회사'),
+      department: latestAppointment?.department || '',
+      hireDate,
+      lastPromotionDate: personnelDate(valueAfterPersonnelLabel(rows, '최종승진일')),
+      employeeGrade: valueAfterPersonnelLabel(rows, '직급'),
+      jobTitle: valueAfterPersonnelLabel(rows, '직위'),
+      duty: currentPosition,
+      appointments,
+      education,
+      careers,
+      awards,
+      importedAt: new Date().toISOString(),
+    },
+  }
+  return {
+    members: existing ? existingMembers.map((item) => item.id === existing.id ? member : item) : [...existingMembers, member],
+    errors: [],
+    importedCount: 1,
+    addedCount: existing ? 0 : 1,
+    updatedCount: existing ? 1 : 0,
+    addedIds: existing ? [] : [member.id],
+    sourceType: 'personnel-record',
+    importedHistoryCount: appointments.length + education.length + careers.length + awards.length,
+  }
 }
 
 export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMember[]): MemberImportResult {
+  const personnelResult = parsePersonnelRecordWorkbook(buffer, existingMembers)
+  if (personnelResult) return personnelResult
   const wb = XLSX.read(buffer, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
@@ -595,7 +702,7 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
     }
   })
 
-  return { members: Array.from(byName.values()), errors, importedCount, addedCount, updatedCount, addedIds }
+  return { members: Array.from(byName.values()), errors, importedCount, addedCount, updatedCount, addedIds, sourceType: 'member-template' }
 }
 
 export interface QuickStartImportResult {
