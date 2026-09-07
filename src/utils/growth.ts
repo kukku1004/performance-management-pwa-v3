@@ -45,6 +45,15 @@ export function getDefaultGrowthProfile(memberId: string): MemberGrowthProfile {
   return { memberId, promotionReviewDate: '', promotionTargetScore: 50, growthMemo: '', personalNotes: [], positionYears: 5, performanceHistory: [], auxiliaryMetrics: { position: 0, rewardPenalty: 0, tenure: 0, education: 0 } }
 }
 
+export function applyMemberTenure(profile: MemberGrowthProfile, member: { yearsOfService: number | null }) {
+  const auxiliaryMetrics = profile.auxiliaryMetrics ?? { position: 0, rewardPenalty: 0, tenure: 0, education: 0 }
+  const managedTenure = member.yearsOfService !== null && Number.isFinite(member.yearsOfService) ? member.yearsOfService : null
+  const tenure = auxiliaryMetrics.tenureOverridden === true
+    ? auxiliaryMetrics.tenure
+    : managedTenure ?? auxiliaryMetrics.tenure
+  return { ...profile, auxiliaryMetrics: { ...auxiliaryMetrics, tenure } }
+}
+
 export const PROMOTION_RULES: Record<Exclude<Level, '부장'>, { next: Level; years: number; target: number }> = {
   사원: { next: '대리', years: 3, target: 36 },
   대리: { next: '과장', years: 4, target: 50 },

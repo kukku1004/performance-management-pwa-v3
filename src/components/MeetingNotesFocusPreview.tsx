@@ -7,7 +7,7 @@ import RecentPerformanceSummary from './RecentPerformanceSummary'
 import MeetingCalendar from './MeetingCalendar'
 import { COLLAPSED_PANEL_WIDTH, PANEL_SPLITTER_WIDTH, PanelSplitter } from './PanelControls'
 import { useWorkspace } from '../state/WorkspaceContext'
-import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory } from '../utils/growth'
+import { applyMemberTenure, calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory } from '../utils/growth'
 import type { MemberInsight } from '../utils/memberInsights'
 import InsightEvidenceButton from './InsightEvidenceButton'
 import MeetingPrintPreview from './MeetingPrintPreview'
@@ -95,9 +95,10 @@ export default function MeetingNotesFocusPreview({
   const sortedNotes = useMemo(() => [...notes].sort((a, b) => b.date.localeCompare(a.date)), [notes])
   const loadedNote = selectedNoteId ? notes.find((note) => note.id === selectedNoteId) ?? null : null
   const storedProfile = activeTeam?.growthProfiles.find((profile) => profile.memberId === selectedMemberId) ?? getDefaultGrowthProfile(selectedMemberId)
+  const simulationProfile = applyMemberTenure(storedProfile, selectedMember)
   const evaluationHistory = activeTeam ? getMemberEvaluationHistory(workspace, activeTeam.id, selectedMemberId) : []
-  const currentSimulation = calculatePromotionSimulation(evaluationHistory, { ...storedProfile, performanceHistory: [] }, selectedMember.level)
-  const expectedSimulation = calculatePromotionSimulation(evaluationHistory, storedProfile, selectedMember.level)
+  const currentSimulation = calculatePromotionSimulation(evaluationHistory, { ...simulationProfile, performanceHistory: [] }, selectedMember.level)
+  const expectedSimulation = calculatePromotionSimulation(evaluationHistory, simulationProfile, selectedMember.level)
   const expectedGap = Math.round((expectedSimulation.currentScore - expectedSimulation.targetScore) * 10) / 10
   const personalNotes = (storedProfile.personalNotes ?? []).map((note, index) => typeof note === 'string' ? { id: `legacy-${index}`, content: note, color: 'gray' as const } : note)
   const performanceCommentRecords = (storedProfile.importedPerformanceDocuments ?? []).flatMap((document) => {

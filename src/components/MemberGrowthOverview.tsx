@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { GrowthPerformanceRecord, TeamMember } from '../types'
 import { PERFORMANCE_GRADE_OPTIONS } from '../types'
 import { useWorkspace } from '../state/WorkspaceContext'
-import { calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory, GRADE_POINTS, mergeProjectHistoryForSimulation } from '../utils/growth'
+import { applyMemberTenure, calculatePromotionSimulation, getDefaultGrowthProfile, getMemberEvaluationHistory, GRADE_POINTS, mergeProjectHistoryForSimulation } from '../utils/growth'
 import PromotionCriteriaDialog from './PromotionCriteriaDialog'
 import { PanelToggleIcon } from './PanelControls'
 
@@ -65,13 +65,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
     : hasManagedTenure
       ? member.yearsOfService!
       : profile.auxiliaryMetrics?.tenure ?? 0
-  const simulationProfile = {
-    ...profile,
-    auxiliaryMetrics: {
-      ...(profile.auxiliaryMetrics ?? { position: 0, rewardPenalty: 0, tenure: 0, education: 0 }),
-      tenure: effectiveTenure,
-    },
-  }
+  const simulationProfile = applyMemberTenure(profile, member)
   const currentSimulation = calculatePromotionSimulation(history, { ...simulationProfile, performanceHistory: [] }, member.level)
   const simulation = calculatePromotionSimulation(history, simulationProfile, member.level)
   const performanceTotal = simulation.rows.reduce((sum, row) => sum + ((row.firstHalf ? GRADE_POINTS[row.firstHalf] : 0) + (row.secondHalf ? GRADE_POINTS[row.secondHalf] : 0)) * row.weight, 0)
