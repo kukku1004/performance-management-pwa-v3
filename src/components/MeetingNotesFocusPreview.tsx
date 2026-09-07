@@ -118,7 +118,6 @@ export default function MeetingNotesFocusPreview({
 
   useEffect(() => {
     setSelectedNoteId(null)
-    setReferencePanelsMinimized(true)
   }, [selectedMemberId])
 
   useEffect(() => {
