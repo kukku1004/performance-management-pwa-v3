@@ -36,23 +36,23 @@ const GRADE_ORDER: Record<EvaluationGrade, number> = {
 
 interface GradeTrendPoint {
   label: string
-  grade: EvaluationGrade
+  shortLabel: string
+  grade: EvaluationGrade | null
 }
 
 function GradeTrend({ points }: { points: GradeTrendPoint[] }) {
-  const visible = points.slice(-6)
-  if (visible.length === 0) return <span className="text-gray-400">-</span>
   const width = 116
-  const height = 32
+  const height = 42
   const padding = 5
-  const coordinates = visible.map((point, index) => ({
+  const coordinates = points.map((point, index) => ({
     ...point,
-    x: visible.length === 1 ? width / 2 : padding + (index * (width - padding * 2)) / (visible.length - 1),
-    y: padding + ((5 - GRADE_POINTS[point.grade]) * (height - padding * 2)) / 4,
+    x: padding + (index * (width - padding * 2)) / Math.max(1, points.length - 1),
+    y: point.grade ? padding + ((5 - GRADE_POINTS[point.grade]) * 22) / 4 : 16,
   }))
-  return <svg viewBox={`0 0 ${width} ${height}`} className="mx-auto h-8 w-[116px] overflow-visible" role="img" aria-label={`성과 추이: ${visible.map((point) => `${point.label} ${point.grade}`).join(', ')}`}>
-    {coordinates.length > 1 && <polyline points={coordinates.map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
-    {coordinates.map((point, index) => <g key={`${point.label}-${index}`}><title>{point.label} {point.grade}</title><circle cx={point.x} cy={point.y} r={index === coordinates.length - 1 ? 3.5 : 2.5} fill={index === coordinates.length - 1 ? '#f05a1a' : '#94a3b8'} /></g>)}
+  const available = coordinates.filter((point): point is typeof point & { grade: EvaluationGrade } => Boolean(point.grade))
+  return <svg viewBox={`0 0 ${width} ${height}`} className="mx-auto h-[42px] w-[116px] overflow-visible" role="img" aria-label={`성과 변화: ${points.map((point) => `${point.label} ${point.grade ?? '없음'}`).join(', ')}`}>
+    {available.length > 1 && <polyline points={available.map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+    {coordinates.map((point, index) => <g key={point.label}><title>{point.label} {point.grade ?? '데이터 없음'}</title><circle cx={point.x} cy={point.y} r={point.grade ? (index === coordinates.length - 1 ? 3.5 : 2.5) : 2.5} fill={point.grade ? (index === coordinates.length - 1 ? '#f05a1a' : '#94a3b8') : '#ffffff'} stroke={point.grade ? 'none' : '#cbd5e1'} /><text x={point.x} y="39" textAnchor="middle" fontSize="8" fill="#94a3b8">{point.shortLabel}</text></g>)}
   </svg>
 }
 
@@ -76,13 +76,9 @@ export default function EvaluationResults() {
     return new Map(members.map((member) => {
       const history = activeTeam ? getMemberEvaluationHistory(workspace, activeTeam.id, member.id) : []
       const stored = activeTeam?.growthProfiles.find((profile) => profile.memberId === member.id)?.performanceHistory ?? []
-      const records = mergeProjectHistoryForSimulation(history, stored).sort((a, b) => a.year - b.year)
+      const records = mergeProjectHistoryForSimulation(history, stored)
       const previous = records.find((record) => record.year === previousYear)
-      const trend = records.flatMap((record) => [
-        ...(record.firstHalf ? [{ label: `${record.year} 상`, grade: record.firstHalf }] : []),
-        ...(record.secondHalf ? [{ label: `${record.year} 하`, grade: record.secondHalf }] : []),
-      ])
-      return [member.id, { previous, trend }] as const
+      return [member.id, { previous }] as const
     }))
   }, [activeProject?.id, activeTeam, evaluationYear, members, workspace.projects])
   const availableLevels = Array.from(
@@ -226,7 +222,11 @@ export default function EvaluationResults() {
                         <Badge tone={GRADE_TONES[row.grade]}>{row.grade}</Badge>
                       </td>
                       <td className="text-center"><div className="flex items-center justify-center gap-2"><span className="flex items-center gap-1 text-[11px] text-gray-400">상{performance?.previous?.firstHalf ? <Badge tone={GRADE_TONES[performance.previous.firstHalf]}>{performance.previous.firstHalf}</Badge> : <span>-</span>}</span><span className="flex items-center gap-1 text-[11px] text-gray-400">하{performance?.previous?.secondHalf ? <Badge tone={GRADE_TONES[performance.previous.secondHalf]}>{performance.previous.secondHalf}</Badge> : <span>-</span>}</span></div></td>
-                      <td className="text-center"><GradeTrend points={performance?.trend ?? []} /></td>
+                      <td className="text-center"><GradeTrend points={[
+                        { label: `${evaluationYear - 1}년 상반기`, shortLabel: '전상', grade: performance?.previous?.firstHalf ?? null },
+                        { label: `${evaluationYear - 1}년 하반기`, shortLabel: '전하', grade: performance?.previous?.secondHalf ?? null },
+                        { label: activeProject ? formatEvaluationPeriod(activeProject.period) : `${evaluationYear}년`, shortLabel: '현재', grade: row.grade },
+                      ]} /></td>
                       <td className="text-center"><Badge tone="neutral">평가중</Badge></td>
                       <td className="text-right">
                         <button
