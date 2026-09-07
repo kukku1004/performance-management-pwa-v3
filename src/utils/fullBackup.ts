@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { AppState, WorkspaceState } from '../types'
+import type { AppState, MemberGrowthProfile, WorkspaceState } from '../types'
 import {
   IMPORTANCE_WEIGHT,
   PERFORMANCE_SCORE,
@@ -75,7 +75,7 @@ export function parseFullBackupJson(text: string): FullBackupEnvelope {
   return createFullBackupEnvelope(migrated, raw.evaluationPeriod.name.trim())
 }
 
-export function createFullBackupWorkbook(state: AppState, periodName: string): XLSX.WorkBook {
+export function createFullBackupWorkbook(state: AppState, periodName: string, growthProfiles: MemberGrowthProfile[] = []): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new()
   const taskScores = calcAllTaskScores(state.tasks, state.criteria)
   const taskScoreMap = new Map(taskScores.map(({ task, score }) => [task.id, score]))
@@ -138,12 +138,12 @@ export function createFullBackupWorkbook(state: AppState, periodName: string): X
       ...state.members.map((member) => [
         periodName,
         member.name,
-        member.level || '-',
-        member.position || '-',
-        member.yearsOfService ?? '-',
-        member.role || '-',
+        member.level || '',
+        member.position || '',
+        member.yearsOfService ?? '',
+        member.role || '',
         member.active ? '사용' : '미사용',
-        member.comment || '-',
+        member.comment || '',
       ]),
     ],
     [18, 14, 10, 10, 8, 16, 11, 32],
@@ -244,6 +244,61 @@ export function createFullBackupWorkbook(state: AppState, periodName: string): X
     [18, 18, 12, 16, 48],
   )
 
+  appendSheet(
+    workbook,
+    '09_이전성과',
+    [
+      ['이름', '직급', '승진심사 시기', '평가연도', '업적(상)', '업적(하)', '역량'],
+      ...growthProfiles.flatMap((profile) => {
+        const member = state.members.find((item) => item.id === profile.memberId)
+        return (profile.performanceHistory ?? []).map((record, index) => [
+          index === 0 ? member?.name ?? '' : '',
+          index === 0 ? member?.level ?? '' : '',
+          index === 0 ? profile.promotionReviewDate : '',
+          record.year,
+          record.firstHalf ?? '',
+          record.secondHalf ?? '',
+          record.competency ?? '',
+        ])
+      }),
+    ],
+    [14, 10, 17, 12, 12, 12, 12],
+  )
+
+  appendSheet(
+    workbook,
+    '10_피어리뷰',
+    [
+      ['과제명', '리뷰어', '대상팀원', '기여도(%)', '수행등급', '근거'],
+      ...state.peerReviews.map((review) => [
+        state.tasks.find((task) => task.id === review.taskId)?.name ?? '',
+        review.reviewerName,
+        state.members.find((member) => member.id === review.targetMemberId)?.name ?? '',
+        review.contributionPercent ?? '',
+        review.grade ?? '',
+        review.evidence,
+      ]),
+    ],
+    [24, 14, 14, 13, 12, 48],
+  )
+
+  appendSheet(
+    workbook,
+    '11_면담기록',
+    [
+      ['팀원', '면담일', '성과기간', '출처', '원본 파일', '면담 내용'],
+      ...state.meetingNotes.map((note) => [
+        state.members.find((member) => member.id === note.memberId)?.name ?? '',
+        note.date,
+        note.sourcePeriod ?? '',
+        note.source === 'performance-pdf' ? '성과 PDF' : '직접 작성',
+        note.sourceFileName ?? '',
+        note.comment,
+      ]),
+    ],
+    [14, 13, 18, 12, 28, 52],
+  )
+
   return workbook
 }
 
@@ -268,7 +323,7 @@ export function createWorkspaceBackupWorkbook(workspace: WorkspaceState): XLSX.W
   appendSheet(workbook, '03_팀원', [['팀', '평가기간', '이름', '직급', '직책', '연차', '역할'], ...workspace.projects.flatMap((project) => project.appState.members.map((member) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), member.name, member.level || '-', member.position || '-', member.yearsOfService ?? '-', member.role || '-']))], [20, 18, 14, 10, 10, 8, 18])
   appendSheet(workbook, '04_과제', [['팀', '평가기간', '과제명', '중요도', '성과등급', '업무량', '목표', '성과'], ...workspace.projects.flatMap((project) => project.appState.tasks.map((task) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), task.name, task.importance, task.performanceGrade, task.workload, task.objective || '-', task.achievement || '-']))], [20, 18, 24, 10, 10, 10, 30, 30])
   appendSheet(workbook, '05_성과결과', [['팀', '평가기간', '팀원', '성과점수', '누적점수', '최종 고과'], ...workspace.projects.flatMap((project) => calcMemberResults(project.appState.members, project.appState.tasks, project.appState.contributions, project.appState.criteria, project.appState.peerReviews).map((result) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), result.member.name, Number(result.performanceScore.toFixed(1)), Number(result.cumulativeScore.toFixed(1)), result.grade]))], [20, 18, 14, 12, 12, 12])
-  appendSheet(workbook, '06_면담기록', [['팀', '평가기간', '팀원', '면담일', '내용'], ...workspace.projects.flatMap((project) => project.appState.meetingNotes.map((note) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), project.appState.members.find((member) => member.id === note.memberId)?.name ?? '-', note.date, note.comment]))], [20, 18, 14, 14, 48])
+  appendSheet(workbook, '06_면담기록', [['팀', '평가기간', '팀원', '면담일', '성과기간', '출처', '원본 파일', '내용'], ...workspace.projects.flatMap((project) => project.appState.meetingNotes.map((note) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), project.appState.members.find((member) => member.id === note.memberId)?.name ?? '-', note.date, note.sourcePeriod ?? '', note.source === 'performance-pdf' ? '성과 PDF' : '직접 작성', note.sourceFileName ?? '', note.comment]))], [20, 18, 14, 14, 18, 12, 28, 48])
   return workbook
 }
 
@@ -287,11 +342,11 @@ export function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export function downloadFullBackup(state: AppState, periodName: string) {
+export function downloadFullBackup(state: AppState, periodName: string, growthProfiles: MemberGrowthProfile[] = []) {
   const safePeriodName = sanitizePeriodName(periodName)
   if (!safePeriodName) throw new Error('평가기간명을 입력하세요.')
   downloadBlob(
-    workbookToBlob(createFullBackupWorkbook(state, periodName.trim())),
+    workbookToBlob(createFullBackupWorkbook(state, periodName.trim(), growthProfiles)),
     `${safePeriodName}_성과관리.xlsx`,
   )
 }

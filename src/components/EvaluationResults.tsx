@@ -104,7 +104,7 @@ export default function EvaluationResults() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => downloadFullBackup(state, periodName)}
+              onClick={() => downloadFullBackup(state, periodName, activeTeam?.growthProfiles ?? [])}
               disabled={memberResults.length === 0}
               className="ui-button ui-button-primary"
             >

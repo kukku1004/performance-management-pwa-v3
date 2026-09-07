@@ -99,6 +99,9 @@ export interface MeetingNote {
     challenge: string
     careerGoal: string
   }
+  source?: 'performance-pdf'
+  sourcePeriod?: string
+  sourceFileName?: string
 }
 
 export interface PeerReview {

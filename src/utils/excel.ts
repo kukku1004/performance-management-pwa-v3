@@ -267,7 +267,7 @@ export function createTaskTemplateFile(tasks: Task[] = []) {
 }
 
 export async function downloadTaskTemplate() {
-  downloadTemplateFile(await loadStaticTemplateFile('tasks') ?? createTaskTemplateFile())
+  await downloadQuickStartTemplateFile('tasks')
 }
 
 export interface TaskImportResult {
@@ -377,7 +377,7 @@ export function createMemberTemplateFile(members: TeamMember[] = []) {
 }
 
 export async function downloadMemberTemplate() {
-  downloadTemplateFile(await loadStaticTemplateFile('members') ?? createMemberTemplateFile())
+  await downloadQuickStartTemplateFile('members')
 }
 
 function templateMembers(members: TeamMember[]) {
@@ -721,6 +721,8 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
   let members = existingMembers
   let taskCount = 0
   let memberCount = 0
+  let taskSheetParsed = false
+  let memberSheetParsed = false
   const errors: string[] = []
 
   workbook.SheetNames.forEach((sheetName) => {
@@ -733,15 +735,17 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
     XLSX.utils.book_append_sheet(singleSheetWorkbook, sheet, sheetName)
     const singleSheetBuffer = XLSX.write(singleSheetWorkbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
 
-    if (labels.has('과제명') && labels.has('과제등급')) {
+    if (labels.has('과제명') && labels.has('과제등급') && !taskSheetParsed) {
       const result = parseTaskWorkbook(singleSheetBuffer, tasks)
       tasks = result.tasks
       taskCount += result.importedCount
+      taskSheetParsed = true
       errors.push(...result.errors.map((error) => `${sheetName}: ${error}`))
-    } else if (isPersonnelRecord || (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도'))) {
+    } else if (!memberSheetParsed && (isPersonnelRecord || (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도')))) {
       const result = parseMemberWorkbook(singleSheetBuffer, members)
       members = result.members
       memberCount += result.importedCount
+      memberSheetParsed = true
       errors.push(...result.errors.map((error) => `${sheetName}: ${error}`))
     }
   })
@@ -1357,7 +1361,7 @@ export async function downloadResultsReport(
     { wch: 16 },
   ]
 
-  const notesRows: (string | number)[][] = [['팀원', '날짜', '면담 코멘트']]
+  const notesRows: (string | number)[][] = [['팀원', '날짜', '성과기간', '출처', '원본 파일', '면담 코멘트']]
   const sortedNotes = [...meetingNotes].sort((a, b) => {
     const memberA = members.find((m) => m.id === a.memberId)?.name ?? ''
     const memberB = members.find((m) => m.id === b.memberId)?.name ?? ''
@@ -1366,10 +1370,10 @@ export async function downloadResultsReport(
   for (const note of sortedNotes) {
     const member = members.find((m) => m.id === note.memberId)
     if (!member) continue
-    notesRows.push([member.name, note.date, note.comment])
+    notesRows.push([member.name, note.date, note.sourcePeriod ?? '', note.source === 'performance-pdf' ? '성과 PDF' : '직접 작성', note.sourceFileName ?? '', note.comment])
   }
   const notesSheet = XLSX.utils.aoa_to_sheet(notesRows)
-  notesSheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 50 }]
+  notesSheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 28 }, { wch: 50 }]
 
   const peerReviewRows: (string | number)[][] = [['대상팀원', '리뷰어', '등급']]
   const sortedReviews = [...peerReviews].sort((a, b) => {

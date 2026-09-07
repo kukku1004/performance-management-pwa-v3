@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useAppState } from '../state/AppContext'
 import { syncAutoDistribution } from '../state/appReducer'
 import { useWorkspace } from '../state/WorkspaceContext'
-import type { Task, TeamMember } from '../types'
+import type { ImportedPerformanceDocument, Task, TeamMember } from '../types'
 import {
   detectManagedWorkbookKind,
   downloadQuickStartTemplateBundle,
@@ -15,6 +15,7 @@ import {
 } from '../utils/excel'
 import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/growthExcel'
 import { mergePerformancePdfIntoGrowthProfiles, parsePerformancePdf, performanceDocumentMatchesPeriod, type PerformancePdfParseResult } from '../utils/performancePdf'
+import { createPerformanceMeetingNote } from '../utils/performanceMeeting'
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
@@ -60,6 +61,12 @@ interface ExcelUploadAccumulator {
   errorCount: number
 }
 
+interface PendingPdfComments {
+  document: ImportedPerformanceDocument
+  memberId: string
+  selected: number[]
+}
+
 function namesFromText(value: string) {
   return Array.from(new Set(value.split(/\r?\n|,/).map((name) => name.trim()).filter(Boolean)))
 }
@@ -79,7 +86,7 @@ function mergeNames(current: string[], additions: string[]) {
 
 export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: ProjectSetupStartProps) {
   const { state, dispatch } = useAppState()
-  const { workspace, activeProject, activeTeam, saveGrowthProfile } = useWorkspace()
+  const { workspace, activeProject, activeTeam, saveGrowthProfile, saveMeetingNote } = useWorkspace()
   const [mode, setMode] = useState<StartMode>('direct')
   const [directTarget, setDirectTarget] = useState<DirectTarget>('tasks')
   const [draftInput, setDraftInput] = useState('')
@@ -95,6 +102,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
   const [excelImportComplete, setExcelImportComplete] = useState(false)
   const [excelUploadResults, setExcelUploadResults] = useState<ExcelUploadResult[]>([])
   const [uploadResultsOpen, setUploadResultsOpen] = useState(false)
+  const [pendingPdfComments, setPendingPdfComments] = useState<PendingPdfComments[]>([])
   const nameInputRef = useRef<HTMLInputElement>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
   const isNameComposingRef = useRef(false)
@@ -171,6 +179,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
     setExcelUploadResults([])
     setUploadResultsOpen(false)
     setMessage('')
+    setPendingPdfComments([])
     let tasks = state.tasks
     let members = state.members
     let taskCount = 0
@@ -374,10 +383,15 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
             const task = tasks.find((item) => normalizedTaskName(item.name) === normalizedTaskName(importedTask.name))
             if (!task) continue
             if (importedTask.grade) dispatch({ type: 'SET_CONTRIBUTION_GRADE', payload: { taskId: task.id, memberId: member.id, personalPerformanceGrade: importedTask.grade } })
-            if (document.comments[0]) dispatch({ type: 'SET_CONTRIBUTION_NOTE', payload: { taskId: task.id, memberId: member.id, evaluationNote: document.comments[0] } })
           }
         }
       }
+      setPendingPdfComments(Array.from(parsedPdfById.values()).flatMap((parsed) => {
+        const document = parsed.document
+        if (!document || document.comments.length === 0) return []
+        const member = members.find((item) => normalizedName(item.name) === normalizedName(document.memberName))
+        return member ? [{ document, memberId: member.id, selected: document.comments.map((_, index) => index) }] : []
+      }))
 
       const results = Array.from(summaries.values()).map<ExcelUploadResult>((summary) => {
         const details = [
@@ -407,6 +421,25 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
     } finally {
       setIsImportingExcel(false)
     }
+  }
+
+  function togglePdfComment(documentId: string, index: number) {
+    setPendingPdfComments((current) => current.map((item) => item.document.id !== documentId ? item : {
+      ...item,
+      selected: item.selected.includes(index) ? item.selected.filter((value) => value !== index) : [...item.selected, index],
+    }))
+  }
+
+  function saveSelectedPdfComments() {
+    let saved = 0
+    pendingPdfComments.forEach((item) => {
+      const note = createPerformanceMeetingNote(item.document, item.memberId, item.document.comments.filter((_, index) => item.selected.includes(index)))
+      if (!note) return
+      saveMeetingNote(note)
+      saved += 1
+    })
+    setPendingPdfComments([])
+    setMessage((current) => `${current} 선택한 성과 코멘트를 면담 기록 ${saved}건으로 저장했습니다.`)
   }
 
   function selectSourceProject(projectId: string) {
@@ -595,6 +628,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
                   ))}
                 </div>
               </aside>}
+              {pendingPdfComments.length > 0 && <section className="mt-4 rounded-lg border border-orange-200 bg-orange-50/40 p-4"><div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-semibold text-gray-950">면담 기록으로 가져올 성과 코멘트</h4><p className="mt-1 text-xs leading-5 text-gray-500">선택한 코멘트만 팀원별·평가기간별 면담 히스토리로 저장됩니다.</p></div><span className="shrink-0 text-xs font-medium text-accent">{pendingPdfComments.reduce((sum, item) => sum + item.selected.length, 0)}개 선택</span></div><div className="mt-3 max-h-56 space-y-3 overflow-y-auto">{pendingPdfComments.map((item) => <div key={item.document.id} className="rounded-md border border-gray-200 bg-white p-3"><strong className="text-sm text-gray-900">{item.document.memberName} · {item.document.periodLabel}</strong><p className="mt-0.5 truncate text-xs text-gray-400">{item.document.fileName}</p><div className="mt-2 space-y-2">{item.document.comments.map((comment, index) => <label key={`${index}-${comment}`} className="flex cursor-pointer items-start gap-2 text-xs leading-5 text-gray-700"><input type="checkbox" checked={item.selected.includes(index)} onChange={() => togglePdfComment(item.document.id, index)} className="mt-0.5 h-4 w-4 accent-[#c05621]" /><span className="whitespace-pre-wrap">{comment}</span></label>)}</div></div>)}</div><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => setPendingPdfComments([])} className="ui-button ui-button-secondary ui-button-sm">코멘트 가져오지 않기</button><button type="button" onClick={saveSelectedPdfComments} disabled={!pendingPdfComments.some((item) => item.selected.length > 0)} className="ui-button ui-button-primary ui-button-sm">선택 코멘트 면담 기록에 저장</button></div></section>}
               <input ref={excelInputRef} type="file" multiple accept=".xlsx,.xls,.pdf,application/pdf" className="hidden" onChange={(event) => { if (event.target.files) void importExcelFiles(event.target.files); event.target.value = '' }} />
             </div>
           </section>}
@@ -640,7 +674,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
           <p className="text-sm text-gray-500">{excelImportComplete ? '가져온 데이터로 평가를 계속할 수 있습니다.' : '파일 내용을 확인한 뒤 다시 업로드해 주세요.'}</p>
           <button
             type="button"
-            disabled={!excelImportComplete}
+            disabled={!excelImportComplete || pendingPdfComments.length > 0}
             onClick={() => { if (onStartEvaluation) onStartEvaluation(); else onClose() }}
             className="ui-button ui-button-primary shrink-0"
           >평가 시작하기</button>

@@ -62,7 +62,19 @@ function migrateContribution(raw: Record<string, unknown>): Contribution | null 
 function migrateMeetingNote(raw: Record<string, unknown>): MeetingNote | null {
   if (typeof raw.id !== 'string' || typeof raw.memberId !== 'string') return null
   if (typeof raw.date !== 'string' || typeof raw.comment !== 'string') return null
-  return { id: raw.id, memberId: raw.memberId, date: raw.date, comment: raw.comment }
+  return {
+    id: raw.id,
+    memberId: raw.memberId,
+    date: raw.date,
+    comment: raw.comment,
+    mood: typeof raw.mood === 'string' ? raw.mood : undefined,
+    growthPoints: raw.growthPoints && typeof raw.growthPoints === 'object'
+      ? raw.growthPoints as MeetingNote['growthPoints']
+      : undefined,
+    source: raw.source === 'performance-pdf' ? 'performance-pdf' : undefined,
+    sourcePeriod: typeof raw.sourcePeriod === 'string' ? raw.sourcePeriod : undefined,
+    sourceFileName: typeof raw.sourceFileName === 'string' ? raw.sourceFileName : undefined,
+  }
 }
 
 function migratePeerReview(raw: Record<string, unknown>): PeerReview | null {
