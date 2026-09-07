@@ -10,6 +10,7 @@ import {
   listDriveBackups,
   loadBackupFromDrive,
   saveFullBackupToDrive,
+  trashWorkspaceFromDrive,
   type SavedDriveBackup,
 } from '../utils/googleDrive'
 import Badge from './Badge'
@@ -68,7 +69,7 @@ export default function GoogleDriveDialog({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [resetOpen, setResetOpen] = useState(false)
+  const [resetTarget, setResetTarget] = useState<'browser' | 'drive' | null>(null)
   const [backupDirectory, setBackupDirectory] = useState<BackupDirectoryHandle | null>(null)
   const [localFormats, setLocalFormats] = useState({ json: true, excel: true })
   const restoreInputRef = useRef<HTMLInputElement>(null)
@@ -77,7 +78,7 @@ export default function GoogleDriveDialog({
     if (!open) {
       setMessage('')
       setError('')
-      setResetOpen(false)
+      setResetTarget(null)
     }
   }, [open])
 
@@ -412,24 +413,36 @@ export default function GoogleDriveDialog({
         </div> : <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 p-8">
           <section className="rounded-xl border border-[#f3d0d0] bg-[#faf0f0] p-6">
             <h4 className="text-base font-bold text-[#c84b31]">전체 데이터 초기화</h4>
-            <div className="mt-5 text-sm leading-6 text-gray-900"><p><strong className="text-[#c84b31]">이 브라우저에 저장된 모든 팀·프로젝트 데이터</strong><span className="text-[#c84b31]">가 삭제됩니다.</span></p><p className="text-[#c84b31]">(지금 열려 있는 프로젝트 하나가 아닙니다.)</p><p>브라우저 저장소만 지우므로 다른 기기나 브라우저의 데이터에는 영향이 없지만, 이 브라우저에서는 되돌릴 수 없습니다.</p><p className="text-[#c84b31]">아래에서 먼저 백업하세요.</p></div>
+            <div className="mt-5 text-sm leading-6 text-gray-900"><p>초기화 범위를 선택하세요. 두 기능 모두 지금 열려 있는 프로젝트 하나가 아니라 <strong>모든 팀·프로젝트 데이터</strong>를 대상으로 합니다.</p><p className="text-[#c84b31]">아래에서 먼저 백업하세요.</p></div>
             <div className="mt-5 border-t border-[#f3d0d0] pt-5"><p className="text-sm font-semibold text-gray-900">삭제 전 브라우저 전체 데이터 백업</p><p className="mt-1 text-xs leading-5 text-gray-600">모든 팀, 평가 프로젝트, 과제, 팀원, 평가, 성장 및 면담 데이터가 포함됩니다.</p><div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3"><label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-900"><input type="checkbox" checked={localFormats.json} onChange={(event) => setLocalFormats((current) => ({ ...current, json: event.target.checked }))} className="h-[18px] w-[18px] accent-[#c05621]" />JSON 전체 데이터 원본</label><label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-900"><input type="checkbox" checked={localFormats.excel} onChange={(event) => setLocalFormats((current) => ({ ...current, excel: event.target.checked }))} className="h-[18px] w-[18px] accent-[#c05621]" />Excel 전체 확인·보관용</label><button type="button" onClick={() => { void saveSelectedWorkspaceBackups() }} disabled={busy || (!localFormats.json && !localFormats.excel)} className="ui-button ui-button-secondary">선택 항목 전체 백업</button></div></div>
           </section>
-          <button type="button" onClick={() => setResetOpen(true)} className="ui-button ui-button-danger self-end px-6">전체 데이터 초기화</button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <section className="rounded-xl border border-gray-200 bg-white p-5"><h5 className="font-semibold text-gray-900">이 브라우저 데이터만 초기화</h5><p className="mt-2 text-xs leading-5 text-gray-600">현재 브라우저의 V3 데이터를 비웁니다. Google Drive 데이터는 유지되어 다시 연결하면 복원될 수 있습니다.</p><button type="button" onClick={() => setResetTarget('browser')} className="ui-button ui-button-secondary mt-4">이 브라우저만 초기화</button></section>
+            <section className="rounded-xl border border-[#f3d0d0] bg-white p-5"><h5 className="font-semibold text-[#c84b31]">Google Drive 포함 전체 데이터 초기화</h5><p className="mt-2 text-xs leading-5 text-gray-600">이 브라우저와 연결된 Google Drive의 앱 전용 성장관리 데이터를 함께 비웁니다. Drive 데이터는 휴지통으로 이동합니다.</p><button type="button" onClick={() => setResetTarget('drive')} disabled={!connected || busy} className="ui-button ui-button-danger mt-4">Drive 포함 전체 초기화</button>{!connected && <p className="mt-2 text-xs text-gray-500">Google Drive 연결 후 사용할 수 있습니다.</p>}</section>
+          </div>
         </div>}
 
         {(message || error) && <div className="mt-4 space-y-1 border-t border-gray-200 pt-3 text-sm">{message && <p className="text-success">{message}</p>}{error && <p className="text-danger">{error}</p>}</div>}
         </div>
       </div>
       <ConfirmDialog
-        open={resetOpen}
-        title="V3 브라우저 데이터 전체 초기화"
-        message="이 브라우저에 저장된 V3의 모든 팀, 평가 프로젝트, 과제, 팀원, 기여도, 피어리뷰, 평가결과, 성장관리 및 면담 데이터가 삭제되며 복구할 수 없습니다. 필요한 JSON·Excel 백업을 완료했는지 확인한 후 초기화하세요. Google Drive에 저장된 백업은 삭제되지 않습니다."
+        open={resetTarget !== null}
+        title={resetTarget === 'drive' ? 'Google Drive 포함 전체 데이터 초기화' : '이 브라우저 데이터만 초기화'}
+        message={resetTarget === 'drive' ? '이 브라우저의 모든 V3 데이터와 연결된 Google Drive의 앱 전용 성장관리 폴더를 함께 초기화합니다. Drive 데이터는 휴지통으로 이동합니다. 필요한 백업을 완료했는지 확인하세요.' : '이 브라우저에 저장된 모든 V3 데이터를 초기화합니다. Google Drive 데이터는 유지되므로 다시 연결하면 복원될 수 있습니다.'}
         confirmLabel="초기화"
-        onCancel={() => setResetOpen(false)}
+        onCancel={() => setResetTarget(null)}
         onConfirm={() => {
+          if (resetTarget === 'drive') {
+            setResetTarget(null)
+            void run(async () => {
+              await trashWorkspaceFromDrive()
+              onResetWorkspace()
+              onClose()
+            })
+            return
+          }
           onResetWorkspace()
-          setResetOpen(false)
+          setResetTarget(null)
           onClose()
         }}
       />

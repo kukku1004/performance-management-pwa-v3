@@ -466,6 +466,18 @@ export async function saveWorkspaceToDrive(workspace: WorkspaceState): Promise<v
   )
 }
 
+export async function trashWorkspaceFromDrive(): Promise<void> {
+  if (!accessToken) throw new Error('먼저 Google Drive를 연결하세요.')
+  const rootFolders = await listFiles(
+    `mimeType = '${FOLDER_MIME}' and 'root' in parents and appProperties has { key='appId' and value='${APP_ID}' } and appProperties has { key='kind' and value='root-folder' }`,
+  )
+  await Promise.all(rootFolders.map((folder) => driveFetch<DriveFile>(`${DRIVE_API}/files/${encodeURIComponent(folder.id)}?fields=id`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  })))
+}
+
 export async function listDriveBackups(): Promise<SavedDriveBackup[]> {
   const files = await listFiles(
     `appProperties has { key='appId' and value='${APP_ID}' } and appProperties has { key='kind' and value='backup-json' }`,
