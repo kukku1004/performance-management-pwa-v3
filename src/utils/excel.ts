@@ -348,6 +348,19 @@ export function parseTaskWorkbook(buffer: ArrayBuffer, existingTasks: Task[]): T
 
 const MEMBER_HEADERS = ['이름', '직책', '직급', '연차', '역할', '코멘트'] as const
 
+function normalizePosition(value: string): Position | '' {
+  const normalized = value.normalize('NFC').trim()
+  const aliases: Record<string, Position> = {
+    '파트 리더': 'PL',
+    파트리더: 'PL',
+    '프로젝트 리더': 'PL',
+    프로젝트리더: 'PL',
+    '프로젝트 매니저': 'PM',
+    프로젝트매니저: 'PM',
+  }
+  return aliases[normalized] ?? (POSITION_OPTIONS.includes(normalized as Position) ? normalized as Position : '')
+}
+
 export function createMemberTemplateFile(members: TeamMember[] = []) {
   const memberRows = members.length > 0
     ? members.map((member) => [
@@ -698,6 +711,7 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
     const rowNum = index + 2
     const name = String(row['이름'] ?? '').trim()
     const positionRaw = String(row['직책'] ?? '').trim()
+    const position = normalizePosition(positionRaw)
     const levelRaw = String(row['직급'] ?? '').trim()
     const yearsRaw = row['연차']
     const role = String(row['역할'] ?? '').trim()
@@ -707,7 +721,7 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
       errors.push(`${rowNum}행: 이름이 비어 있어 건너뛰었습니다.`)
       return
     }
-    if (positionRaw && !POSITION_OPTIONS.includes(positionRaw as Position)) {
+    if (positionRaw && !position) {
       errors.push(`${rowNum}행 '${name}': 직책 '${positionRaw}'은(는) 유효하지 않습니다. (팀장/PM/PL/팀원)`)
       return
     }
@@ -728,7 +742,7 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
       id: existing?.id ?? uuidv4(),
       name: personnelProtected ? existing!.name : name,
       active: existing?.active ?? true,
-      position: personnelProtected ? existing!.position : ((positionRaw as Position) || ''),
+      position: personnelProtected ? existing!.position : position,
       level: personnelProtected ? existing!.level : ((levelRaw as Level) || ''),
       yearsOfService: personnelProtected ? existing!.yearsOfService : yearsOfService,
       role: personnelProtected ? existing!.role : role,
@@ -1236,7 +1250,7 @@ export function parseProjectPeerReviewWorkbook(
     const participants = new Set((templateVersion >= 5 ? members : peerReviewParticipants(task.id, members, contributions)).map((member) => member.id))
     for (const [rowIndex, row] of rows.slice(3).entries()) {
       const targetLabel = normalizedLabel(row[0])
-      if (!targetLabel || targetLabel === '기여도 합계') continue
+      if (!targetLabel || targetLabel === '합계' || targetLabel === '기여도 합계') continue
       const target = memberByLabel.get(targetLabel)
       if (!target) { errors.push(`${sheetName} ${rowIndex + 4}행: 평가 대상이 일치하지 않습니다.`); continue }
       if (!participants.has(target.id)) { errors.push(`${sheetName} ${rowIndex + 4}행: 해당 과제 참여자가 아닙니다.`); continue }
