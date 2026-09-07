@@ -715,6 +715,40 @@ export interface QuickStartImportResult {
   errors: string[]
 }
 
+function legacyPromotionSimulationHeaderIndex(rows: unknown[][]) {
+  return rows.slice(0, 10).findIndex((row) => {
+    const labels = row.map(normalizedLabel)
+    return labels.includes('사번') && labels.includes('이름') && labels.includes('평가등급')
+  })
+}
+
+function legacyPromotionSimulationMember(rows: unknown[][], existingMembers: TeamMember[]): TeamMember | null {
+  const headerIndex = legacyPromotionSimulationHeaderIndex(rows)
+  if (headerIndex < 0) return null
+  const header = rows[headerIndex]
+  const nameColumn = header.findIndex((value) => normalizedLabel(value) === '이름')
+  const name = normalizedLabel(rows[headerIndex + 1]?.[nameColumn])
+  if (!name) return null
+
+  const currentLevelHeaderIndex = rows.findIndex((row) => row.some((value) => normalizedLabel(value) === '현직급'))
+  const currentLevelColumn = currentLevelHeaderIndex >= 0
+    ? rows[currentLevelHeaderIndex].findIndex((value) => normalizedLabel(value) === '현직급')
+    : -1
+  const levelRaw = currentLevelHeaderIndex >= 0 && currentLevelColumn >= 0
+    ? normalizedLabel(rows[currentLevelHeaderIndex + 1]?.[currentLevelColumn])
+    : ''
+  const yearsRaw = currentLevelHeaderIndex >= 0 && currentLevelColumn >= 0
+    ? Number(rows[currentLevelHeaderIndex + 1]?.[currentLevelColumn + 1])
+    : NaN
+  const existing = existingMembers.find((member) => normalizedLabel(member.name) === name)
+  return {
+    ...(existing ?? { id: uuidv4(), name, active: true, position: '', level: '', yearsOfService: null, role: '', comment: '' }),
+    name,
+    level: LEVEL_OPTIONS.includes(levelRaw as Level) ? levelRaw as Level : existing?.level ?? '',
+    yearsOfService: Number.isFinite(yearsRaw) ? yearsRaw : existing?.yearsOfService ?? null,
+  }
+}
+
 export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task[], existingMembers: TeamMember[]): QuickStartImportResult {
   const workbook = XLSX.read(buffer, { type: 'array' })
   let tasks = existingTasks
@@ -734,6 +768,8 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
     const singleSheetWorkbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(singleSheetWorkbook, sheet, sheetName)
     const singleSheetBuffer = XLSX.write(singleSheetWorkbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
+    const isLegacyPromotionSimulation = legacyPromotionSimulationHeaderIndex(rows) >= 0
+    const legacyMember = legacyPromotionSimulationMember(rows, members)
 
     if (labels.has('과제명') && labels.has('과제등급') && !taskSheetParsed) {
       const result = parseTaskWorkbook(singleSheetBuffer, tasks)
@@ -741,6 +777,14 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
       taskCount += result.importedCount
       taskSheetParsed = true
       errors.push(...result.errors.map((error) => `${sheetName}: ${error}`))
+    } else if (isLegacyPromotionSimulation) {
+      if (legacyMember) {
+        const existingIndex = members.findIndex((member) => normalizedLabel(member.name) === normalizedLabel(legacyMember.name))
+        members = existingIndex >= 0
+          ? members.map((member, index) => index === existingIndex ? legacyMember : member)
+          : [...members, legacyMember]
+        memberCount += 1
+      }
     } else if (!memberSheetParsed && (isPersonnelRecord || (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도')))) {
       const result = parseMemberWorkbook(singleSheetBuffer, members)
       members = result.members

@@ -27,6 +27,7 @@ export function containsGrowthHistoryData(buffer: ArrayBuffer) {
         (labels.includes('승진심사 시기') && labels.includes('평가연도'))
         || labels.includes('평가 구분')
         || labels.includes('구분')
+        || (labels.includes('사번') && labels.includes('평가등급'))
       )
     })
   })
