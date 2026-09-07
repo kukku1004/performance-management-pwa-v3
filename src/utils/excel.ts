@@ -553,6 +553,18 @@ function personnelMonth(value: unknown) {
   return match ? `${match[1]}-${match[2].padStart(2, '0')}` : ''
 }
 
+function personnelLevel(value: unknown): Level | '' {
+  const code = compactPersonnelLabel(value).toUpperCase()
+  const levels: Record<string, Level> = {
+    G3: '사원',
+    G4: '대리',
+    G5: '과장',
+    G6: '차장',
+    G7: '부장',
+  }
+  return levels[code] ?? (LEVEL_OPTIONS.includes(code as Level) ? code as Level : '')
+}
+
 function valueAfterPersonnelLabel(rows: unknown[][], label: string) {
   const wanted = compactPersonnelLabel(label)
   for (const row of rows) {
@@ -605,14 +617,21 @@ function parsePersonnelRecordWorkbook(buffer: ArrayBuffer, existingMembers: Team
   const hireDate = personnelDate(valueAfterPersonnelLabel(rows, '당사입사'))
   const latestAppointment = appointments[0]
   const currentDuty = rows.map((row) => ({ startDate: personnelDate(row[34]), duty: String(row[39] ?? '').trim() })).find((item) => item.startDate && item.duty)?.duty ?? ''
-  const yearsOfService = hireDate ? Math.max(0, Math.round(((Date.now() - new Date(`${hireDate}T00:00:00`).getTime()) / 31_557_600_000) * 10) / 10) : null
+  const hireYears = hireDate ? Math.max(0, Math.round(((Date.now() - new Date(`${hireDate}T00:00:00`).getTime()) / 31_557_600_000) * 10) / 10) : null
   const currentPosition = valueAfterPersonnelLabel(rows, '직책')
+  const employeeGrade = valueAfterPersonnelLabel(rows, '직급')
+  const jobTitle = valueAfterPersonnelLabel(rows, '직위')
+  const gradeYearsValue = valueAfterPersonnelLabel(rows, '년차')
+  const gradeYearsRaw = gradeYearsValue === '' ? Number.NaN : Number(gradeYearsValue)
+  const gradeYears = Number.isFinite(gradeYearsRaw) ? Math.max(0, gradeYearsRaw) : null
+  const mappedLevel = personnelLevel(employeeGrade) || personnelLevel(jobTitle)
   const existing = existingMembers.find((member) => member.name.normalize('NFC').trim() === name.normalize('NFC').trim())
   const member: TeamMember = {
     ...(existing ?? { id: uuidv4(), name, active: true, position: '', level: '', yearsOfService: null, role: '', comment: '' }),
     name,
     position: existing?.position || (POSITION_OPTIONS.includes(currentPosition as Position) ? currentPosition as Position : ''),
-    yearsOfService: existing?.yearsOfService ?? yearsOfService,
+    level: mappedLevel || existing?.level || '',
+    yearsOfService: gradeYears ?? existing?.yearsOfService ?? hireYears,
     role: existing?.role || currentDuty,
     personnelRecord: {
       employeeNumber: valueAfterPersonnelLabel(rows, '사번'),
@@ -620,8 +639,8 @@ function parsePersonnelRecordWorkbook(buffer: ArrayBuffer, existingMembers: Team
       department: latestAppointment?.department || '',
       hireDate,
       lastPromotionDate: personnelDate(valueAfterPersonnelLabel(rows, '최종승진일')),
-      employeeGrade: valueAfterPersonnelLabel(rows, '직급'),
-      jobTitle: valueAfterPersonnelLabel(rows, '직위'),
+      employeeGrade,
+      jobTitle,
       duty: currentPosition,
       appointments,
       education,

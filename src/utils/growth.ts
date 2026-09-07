@@ -64,13 +64,22 @@ export function getPromotionYears(reviewDate: string, fallbackYear = new Date().
 }
 
 export function mergeProjectHistoryForSimulation(history: MemberEvaluationHistory[], stored: GrowthPerformanceRecord[] = []) {
-  const byYear = new Map(stored.map((item) => [item.year, { ...item }]))
+  const byYear = new Map<number, GrowthPerformanceRecord>()
   for (const item of [...history].reverse()) {
     const record = byYear.get(item.year) ?? { year: item.year, firstHalf: null, secondHalf: null, competency: null }
     if (item.label.includes('상반기')) record.firstHalf = item.grade
     else if (item.label.includes('하반기')) record.secondHalf = item.grade
     else if (!record.secondHalf) record.secondHalf = item.grade
     byYear.set(item.year, record)
+  }
+  for (const item of stored) {
+    const record = byYear.get(item.year) ?? { year: item.year, firstHalf: null, secondHalf: null, competency: null }
+    byYear.set(item.year, {
+      year: item.year,
+      firstHalf: item.firstHalf ?? record.firstHalf,
+      secondHalf: item.secondHalf ?? record.secondHalf,
+      competency: item.competency ?? record.competency,
+    })
   }
   return Array.from(byYear.values())
 }
