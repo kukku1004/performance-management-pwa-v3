@@ -104,21 +104,56 @@ export default function TeamManagement() {
     dispatch({ type: 'UPDATE_MEMBER', payload: { ...member, active: !member.active } })
   }
 
-  async function importMemberFile(file: File | undefined) {
-    if (!file) return
-    const buffer = await file.arrayBuffer()
-    const result = parseMemberWorkbook(buffer, state.members)
-    dispatch({ type: 'IMPORT_MEMBERS', payload: result.members })
+  async function importMemberFiles(files: FileList | File[]) {
+    if (files.length === 0) return
+    let members = state.members
+    let importedCount = 0
+    let addedCount = 0
+    let updatedCount = 0
+    let importedHistoryCount = 0
+    let hasPersonnelRecord = false
+    const addedIds: string[] = []
+    const errors: string[] = []
+
+    for (const file of Array.from(files)) {
+      try {
+        const buffer = await file.arrayBuffer()
+        const result = parseMemberWorkbook(buffer, members)
+        members = result.members
+        importedCount += result.importedCount
+        addedCount += result.addedCount
+        updatedCount += result.updatedCount
+        importedHistoryCount += result.importedHistoryCount ?? 0
+        hasPersonnelRecord ||= result.sourceType === 'personnel-record'
+        addedIds.push(...result.addedIds)
+        errors.push(...result.errors.map((error) => `${file.name}: ${error}`))
+      } catch {
+        errors.push(`${file.name}: 파일을 읽을 수 없습니다.`)
+      }
+    }
+
+    const result: MemberImportResult = {
+      members,
+      errors,
+      importedCount,
+      addedCount,
+      updatedCount,
+      addedIds,
+      sourceType: hasPersonnelRecord ? 'personnel-record' : 'member-template',
+      importedHistoryCount,
+    }
+    dispatch({ type: 'IMPORT_MEMBERS', payload: members })
     setImportResult(result)
-    setRecentlyAddedIds(new Set(result.addedIds))
+    setRecentlyAddedIds(new Set(addedIds))
     setSelectedMemberIds(new Set())
     setUploadOpen(false)
   }
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+    const files = e.target.files
+    if (!files) return
+    await importMemberFiles(files)
     e.target.value = ''
-    await importMemberFile(file)
   }
 
   return (
@@ -132,7 +167,7 @@ export default function TeamManagement() {
           </div>
           <button type="button" role="tab" aria-selected={activeView === 'peer'} onClick={() => setActiveView('peer')} className={`border-b-2 px-5 pb-3 pt-1 transition-colors ${activeView === 'peer' ? 'border-gray-950 text-lg font-semibold text-gray-950' : 'border-transparent text-sm font-medium text-gray-500 hover:text-gray-800'}`}>피어리뷰</button>
         </div>
-        {activeView === 'members' && <div className="flex flex-wrap items-center gap-2"><button onClick={downloadMemberTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button>{hasMembers && <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button>}<input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>}
+        {activeView === 'members' && <div className="flex flex-wrap items-center gap-2"><button onClick={downloadMemberTemplate} className="ui-button ui-button-secondary">엑셀 양식 다운로드</button>{hasMembers && <button type="button" aria-expanded={uploadOpen} onClick={() => setUploadOpen((open) => !open)} className="ui-button ui-button-secondary">엑셀로 업로드</button>}<input ref={fileInputRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={handleFileSelected} /></div>}
       </div>
 
       {activeView === 'peer' ? <PeerReviewSection /> : <>
@@ -141,7 +176,7 @@ export default function TeamManagement() {
         title={hasMembers ? '팀원 Excel 파일을 여기에 드래그' : '등록된 팀원이 없습니다.'}
         description={hasMembers ? '팀원 양식 또는 종합 인사기록카드(.xls)를 올리면 기본정보와 발령·교육·경력·포상이력을 연결합니다.' : '아래 입력 영역에서 직접 등록할 수 있습니다.\n또는\n팀원 양식이나 종합 인사기록카드를 드래그하여 등록할 수 있습니다.'}
         onClick={() => fileInputRef.current?.click()}
-        onDrop={(event) => { event.preventDefault(); void importMemberFile(event.dataTransfer.files[0]) }}
+        onDrop={(event) => { event.preventDefault(); void importMemberFiles(event.dataTransfer.files) }}
         className={!hasMembers ? 'cursor-pointer bg-gray-50 hover:border-orange-300 hover:bg-orange-50/30' : 'cursor-pointer'}
       />}
 
