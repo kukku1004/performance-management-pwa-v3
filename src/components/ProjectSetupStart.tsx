@@ -14,7 +14,7 @@ import {
   type QuickStartTemplateKind,
 } from '../utils/excel'
 import { containsGrowthHistoryData, parseGrowthHistoryWorkbook } from '../utils/growthExcel'
-import { mergePerformancePdfIntoGrowthProfiles, parsePerformancePdf, performanceDocumentMatchesPeriod, type PerformancePdfParseResult } from '../utils/performancePdf'
+import { mergePerformancePdfIntoGrowthProfiles, parsePerformancePdf, type PerformancePdfParseResult } from '../utils/performancePdf'
 import { mergePeerReviews } from '../utils/peerReview'
 import { formatEvaluationPeriod } from '../utils/workspace'
 import FileDropZone from './FileDropZone'
@@ -73,10 +73,6 @@ function namesFromText(value: string) {
 
 function normalizedName(value: string) {
   return value.normalize('NFC').trim()
-}
-
-function normalizedTaskName(value: string) {
-  return normalizedName(value).replace(/\s+/g, '').toLowerCase()
 }
 
 function mergeNames(current: string[], additions: string[]) {
@@ -265,14 +261,6 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
             memberCount += 1
             summary.memberCount += 1
           }
-          if (activeProject && performanceDocumentMatchesPeriod(document, activeProject.period)) {
-            for (const importedTask of document.tasks) {
-              if (tasks.some((task) => normalizedTaskName(task.name) === normalizedTaskName(importedTask.name))) continue
-              tasks = [...tasks, { id: uuidv4(), name: importedTask.name, importance: '일반', performanceGrade: importedTask.grade ?? 'B', workload: '중', objective: '', achievement: '' }]
-              taskCount += 1
-              summary.taskCount += 1
-            }
-          }
           summary.performancePdfCount += 1
           summary.errorCount += parsed.errors.length
           errors.push(...parsed.errors.map((error) => `${file.name}: ${error}`))
@@ -373,19 +361,6 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
       if (memberCount > 0) dispatch({ type: 'IMPORT_MEMBERS', payload: members })
       if (peerReviewFileCount > 0) dispatch({ type: 'IMPORT_PEER_REVIEWS', payload: peerReviews })
       if (growthMemberCount > 0) growthProfiles.forEach((profile) => saveGrowthProfile(profile))
-      if (activeProject) {
-        for (const parsed of parsedPdfById.values()) {
-          const document = parsed.document
-          if (!document || !performanceDocumentMatchesPeriod(document, activeProject.period)) continue
-          const member = members.find((item) => normalizedName(item.name) === normalizedName(document.memberName))
-          if (!member) continue
-          for (const importedTask of document.tasks) {
-            const task = tasks.find((item) => normalizedTaskName(item.name) === normalizedTaskName(importedTask.name))
-            if (!task) continue
-            if (importedTask.grade) dispatch({ type: 'SET_CONTRIBUTION_GRADE', payload: { taskId: task.id, memberId: member.id, personalPerformanceGrade: importedTask.grade } })
-          }
-        }
-      }
       setPendingPdfComments(Array.from(parsedPdfById.values()).flatMap((parsed) => {
         const document = parsed.document
         if (!document || document.comments.length === 0) return []
@@ -594,7 +569,7 @@ export default function ProjectSetupStart({ open, onClose, onStartEvaluation }: 
             </div>
             <div className="min-w-0 border-t border-gray-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <h3 className="ui-section-title">작성한 양식 업로드</h3>
-              <p className="mt-1 text-sm leading-6 text-gray-500">과제·팀원·이전 성과·피어리뷰 Excel과 성과평가 PDF를 함께 올리면 자동으로 구분합니다.</p>
+              <p className="mt-1 text-sm leading-6 text-gray-500">과제·팀원·이전 성과·피어리뷰 Excel과 성과평가 PDF를 함께 올리면 자동으로 구분합니다. 성과 PDF는 팀원·과거 성과·코멘트 기록에만 연결되며 현재 평가 과제를 만들지 않습니다.</p>
               <FileDropZone
                 className="mt-4 min-h-56"
                 disabled={isImportingExcel}
