@@ -156,7 +156,12 @@ export default function TeamManagement() {
       const member = members.find((item) => item.id === memberId)
       if (!member) return
       const current = activeTeam?.growthProfiles.find((profile) => profile.memberId === memberId) ?? getDefaultGrowthProfile(memberId)
-      saveGrowthProfile({ ...current, auxiliaryMetrics: auxiliaryMetricsFromPersonnelRecord(member) })
+      saveGrowthProfile({
+        ...current,
+        auxiliaryMetrics: current.auxiliaryMetrics?.source === 'manual'
+          ? current.auxiliaryMetrics
+          : auxiliaryMetricsFromPersonnelRecord(member),
+      })
     })
     setImportResult(result)
     setRecentlyAddedIds(new Set(addedIds))

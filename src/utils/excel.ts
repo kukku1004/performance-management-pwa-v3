@@ -722,16 +722,17 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
     }
 
     const existing = byName.get(name)
+    const personnelProtected = Boolean(existing?.personnelRecord)
     const member: TeamMember = {
       ...existing,
       id: existing?.id ?? uuidv4(),
-      name,
+      name: personnelProtected ? existing!.name : name,
       active: existing?.active ?? true,
-      position: (positionRaw as Position) || '',
-      level: (levelRaw as Level) || '',
-      yearsOfService,
-      role,
-      comment,
+      position: personnelProtected ? existing!.position : ((positionRaw as Position) || ''),
+      level: personnelProtected ? existing!.level : ((levelRaw as Level) || ''),
+      yearsOfService: personnelProtected ? existing!.yearsOfService : yearsOfService,
+      role: personnelProtected ? existing!.role : role,
+      comment: personnelProtected ? existing!.comment : comment,
       ...(existing?.personnelRecord ? { personnelRecord: existing.personnelRecord } : {}),
     }
     byName.set(name, member)
@@ -781,11 +782,12 @@ function legacyPromotionSimulationMember(rows: unknown[][], existingMembers: Tea
     ? Number(rows[currentLevelHeaderIndex + 1]?.[currentLevelColumn + 1])
     : NaN
   const existing = existingMembers.find((member) => normalizedLabel(member.name) === name)
+  const personnelProtected = Boolean(existing?.personnelRecord)
   return {
     ...(existing ?? { id: uuidv4(), name, active: true, position: '', level: '', yearsOfService: null, role: '', comment: '' }),
-    name,
-    level: LEVEL_OPTIONS.includes(levelRaw as Level) ? levelRaw as Level : existing?.level ?? '',
-    yearsOfService: Number.isFinite(yearsRaw) ? yearsRaw : existing?.yearsOfService ?? null,
+    name: personnelProtected ? existing!.name : name,
+    level: personnelProtected ? existing!.level : LEVEL_OPTIONS.includes(levelRaw as Level) ? levelRaw as Level : existing?.level ?? '',
+    yearsOfService: personnelProtected ? existing!.yearsOfService : Number.isFinite(yearsRaw) ? yearsRaw : existing?.yearsOfService ?? null,
   }
 }
 
