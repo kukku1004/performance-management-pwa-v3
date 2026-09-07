@@ -110,17 +110,25 @@ function findTasks(rows: PdfRow[]): ImportedPerformanceTask[] {
 function findComments(rows: PdfRow[]) {
   const commentPage = rows.find((row) => row.text.replace(/\s/g, '').includes('성과평가코멘트'))?.page
   if (!commentPage) return []
-  const commentRows = rows.filter((row) => row.page === commentPage && !/^성과평가\s*코멘트$/.test(row.text))
+  const pageRows = rows.filter((row) => row.page === commentPage)
+  const commentHeadingIndex = pageRows.findIndex((row) => row.text.replace(/\s/g, '').includes('성과평가코멘트'))
+  const competencyIndex = pageRows.findIndex((row, index) => index > commentHeadingIndex && /역량평가\s*(?:상세정보|코멘트)/.test(row.text))
+  const commentRows = pageRows.slice(commentHeadingIndex + 1, competencyIndex < 0 ? pageRows.length : competencyIndex)
   // 평가자 표시는 PDF에 따라 독립된 행이거나 코멘트 첫 문장과 같은 행에 놓인다.
   // 이전에는 행 간격을 거슬러 올라가 시작점을 찾으면서 간격이 촘촘한 하반기 양식의
   // 모든 평가자 블록이 0번 행으로 합쳐졌다. 각 "비공개" 표식을 경계로 직접 나눈다.
-  const starts = commentRows.flatMap((row, index) => /비\s*공\s*개/.test(row.text) ? [index] : [])
+  const markerIndexes = commentRows.flatMap((row, index) => /비\s*공\s*개|본인평가|(?:1|2|3)차\s*부서장\s*평가/.test(row.text) ? [index] : [])
+  const starts = Array.from(new Set(markerIndexes.map((index) => {
+    let start = index
+    while (start > 0 && Math.abs(commentRows[start - 1].y - commentRows[start].y) <= 24) start -= 1
+    return start
+  })))
   if (starts.length === 0) starts.push(0)
   return starts.flatMap((start, index) => {
     const end = starts[index + 1] ?? commentRows.length
     const text = normalizeText(commentRows.slice(start, end)
       .map((row) => row.text.replace(/^(?:비\s*공\s*개\s*)+/, '').trim())
-      .filter((line) => line.length >= 2 && !/^\d+$/.test(line))
+      .filter((line) => line.length >= 2 && !/^\d+$/.test(line) && !/^(?:본인평가|(?:1|2|3)차\s*부서장\s*평가|[가-힣]{2,4})$/.test(line))
       .join(' '))
     return text ? [text] : []
   })
