@@ -110,11 +110,22 @@ function findTasks(rows: PdfRow[]): ImportedPerformanceTask[] {
 function findComments(rows: PdfRow[]) {
   const commentPage = rows.find((row) => row.text.replace(/\s/g, '').includes('성과평가코멘트'))?.page
   if (!commentPage) return []
-  const lines = rows.filter((row) => row.page === commentPage && !/^(성과평가\s*코멘트|비공개)$/.test(row.text))
-    .map((row) => row.text.replace(/^비공개\s*/, '').trim())
-    .filter((line) => line.length >= 2 && !/^\d+$/.test(line))
-  const text = normalizeText(lines.join(' '))
-  return text ? [text] : []
+  const commentRows = rows.filter((row) => row.page === commentPage && !/^성과평가\s*코멘트$/.test(row.text))
+  const markerIndexes = commentRows.flatMap((row, index) => row.text.replace(/\s/g, '') === '비공개' ? [index] : [])
+  const starts = Array.from(new Set(markerIndexes.map((index) => {
+    let start = index
+    while (start > 0 && commentRows[start - 1].y - commentRows[start].y <= 15) start -= 1
+    return start
+  })))
+  if (starts.length === 0) starts.push(0)
+  return starts.flatMap((start, index) => {
+    const end = starts[index + 1] ?? commentRows.length
+    const text = normalizeText(commentRows.slice(start, end)
+      .map((row) => row.text.replace(/^(?:비공개\s*)+/, '').trim())
+      .filter((line) => line.length >= 2 && !/^\d+$/.test(line))
+      .join(' '))
+    return text ? [text] : []
+  })
 }
 
 export async function parsePerformancePdf(
