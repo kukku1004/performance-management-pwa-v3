@@ -233,7 +233,9 @@ export function detectManagedWorkbookKind(buffer: ArrayBuffer): ManagedWorkbookK
   if (!firstSheet) return 'unknown'
   const rows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: '' })
   const labels = new Set(rows.slice(0, 8).flat().map((value) => normalizedLabel(value)))
+  const isPersonnelRecord = rows.slice(0, 8).flat().some((value) => compactPersonnelLabel(value).includes('종합인사기록카드'))
   if (labels.has('과제명') && labels.has('과제등급')) return 'tasks'
+  if (isPersonnelRecord) return 'members'
   if (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도')) return 'members'
   return 'unknown'
 }
@@ -726,6 +728,7 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
     if (!sheet) return
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', range: 0 })
     const labels = new Set(rows.slice(0, 8).flat().map((value) => normalizedLabel(value)))
+    const isPersonnelRecord = rows.slice(0, 8).flat().some((value) => compactPersonnelLabel(value).includes('종합인사기록카드'))
     const singleSheetWorkbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(singleSheetWorkbook, sheet, sheetName)
     const singleSheetBuffer = XLSX.write(singleSheetWorkbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer
@@ -735,7 +738,7 @@ export function parseQuickStartWorkbook(buffer: ArrayBuffer, existingTasks: Task
       tasks = result.tasks
       taskCount += result.importedCount
       errors.push(...result.errors.map((error) => `${sheetName}: ${error}`))
-    } else if (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도')) {
+    } else if (isPersonnelRecord || (labels.has('이름') && (labels.has('직급') || labels.has('직책')) && !labels.has('평가연도'))) {
       const result = parseMemberWorkbook(singleSheetBuffer, members)
       members = result.members
       memberCount += result.importedCount
