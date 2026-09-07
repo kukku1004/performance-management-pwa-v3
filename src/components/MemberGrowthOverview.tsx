@@ -32,7 +32,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
     const width = Math.min(criteriaOpen ? 1240 : 560, window.innerWidth - 48)
     setSimulationPopupPosition({ x: Math.max(24, window.innerWidth - width - 24), y: Math.min(SIMULATION_POPUP_TOP, Math.max(16, window.innerHeight - 160)) })
   }, [criteriaOpen])
-  useEffect(() => onPanelMinimizedChange?.(collapsedContent ? performancePanelMinimized : simulationPanelMinimized && performancePanelMinimized), [collapsedContent, onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
+  useEffect(() => onPanelMinimizedChange?.(simulationPanelMinimized && performancePanelMinimized), [onPanelMinimizedChange, performancePanelMinimized, simulationPanelMinimized])
   useEffect(() => {
     const element = panelRef.current
     if (!element) return
