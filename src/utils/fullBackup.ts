@@ -34,9 +34,10 @@ function appendSheet(
   widths: number[],
   inputColumns: number[] = [],
 ) {
-  const sheet = XLSX.utils.aoa_to_sheet(rows)
+  const normalizedRows = rows.map((row) => row.map((value) => typeof value === 'string' ? normalizeExcelText(value) : value))
+  const sheet = XLSX.utils.aoa_to_sheet(normalizedRows)
   sheet['!cols'] = widths.map((wch) => ({ wch }))
-  sheet['!rows'] = rows.map((row, index) => ({ hpt: index === 0 ? 28 : row.some((value) => String(value).length > 50) ? 38 : 24 }))
+  sheet['!rows'] = normalizedRows.map((row, index) => ({ hpt: index === 0 ? 28 : row.some((value) => String(value).length > 50) ? 38 : 24 }))
   sheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
   if (rows.length > 0 && widths.length > 0) sheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(widths.length - 1)}${rows.length}` }
   const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : null
@@ -49,7 +50,7 @@ function appendSheet(
         const bodyFill = inputColumns.includes(column) ? 'FFF1E6' : row % 2 === 0 ? 'F7F8FA' : 'FFFFFF'
         const border = { style: 'thin' as const, color: { rgb: 'D9DEE7' } }
         cell.s = {
-          font: { name: 'Arial', sz: row === 0 ? 10 : 9, bold: row === 0, color: { rgb: row === 0 ? 'FFFFFF' : '111827' } },
+          font: { name: '맑은 고딕', sz: row === 0 ? 10 : 9, bold: row === 0, color: { rgb: row === 0 ? 'FFFFFF' : '111827' } },
           fill: { patternType: 'solid', fgColor: { rgb: row === 0 ? '17233B' : bodyFill } },
           alignment: { vertical: 'center', horizontal: row === 0 ? 'center' : typeof cell.v === 'number' ? 'right' : 'left', wrapText: true },
           border: { top: border, right: border, bottom: border, left: border },
@@ -58,6 +59,97 @@ function appendSheet(
     }
   }
   XLSX.utils.book_append_sheet(workbook, sheet, name)
+}
+
+function normalizeExcelText(value: string) {
+  return value
+    .normalize('NFC')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+    .replace(/\uFFFD/g, '')
+}
+
+function appendCommentSheet(
+  workbook: XLSX.WorkBook,
+  state: AppState,
+  growthProfiles: MemberGrowthProfile[],
+) {
+  const records: Array<{ memberName: string; period: string; fileName: string; comment: string }> = []
+  const seen = new Set<string>()
+  const addRecord = (memberName: string, period: string, fileName: string, comment: string) => {
+    const normalized = {
+      memberName: normalizeExcelText(memberName).trim(),
+      period: normalizeExcelText(period).trim(),
+      fileName: normalizeExcelText(fileName).trim(),
+      comment: normalizeExcelText(comment).replace(/\s+/g, ' ').trim(),
+    }
+    if (!normalized.comment) return
+    const key = [normalized.memberName, normalized.period, normalized.fileName, normalized.comment].join('\u0001')
+    if (seen.has(key)) return
+    seen.add(key)
+    records.push(normalized)
+  }
+
+  growthProfiles.forEach((profile) => {
+    const memberName = state.members.find((member) => member.id === profile.memberId)?.name ?? ''
+    const documents = profile.importedPerformanceDocuments ?? []
+    documents.forEach((document) => {
+      const comments = document.selectedComments ?? []
+      comments.forEach((comment) => addRecord(memberName, document.periodLabel, document.fileName, comment))
+    })
+  })
+  state.meetingNotes.filter((note) => note.source === 'performance-pdf').forEach((note) => {
+    const memberName = state.members.find((member) => member.id === note.memberId)?.name ?? ''
+    note.comment.split(/\n{2,}/).forEach((comment) => addRecord(memberName, note.sourcePeriod ?? '', note.sourceFileName ?? '', comment))
+  })
+
+  const groups = new Map<string, typeof records>()
+  records.forEach((record) => {
+    const key = [record.memberName, record.period, record.fileName].join('\u0001')
+    const current = groups.get(key) ?? []
+    current.push(record)
+    groups.set(key, current)
+  })
+
+  const rows: (string | number | boolean)[][] = [['팀원 / 평가기간', '구분', '본인평가 comment', '1차평가 comment', '2차평가 comment', '3차평가 comment']]
+  Array.from(groups.values()).forEach((group) => {
+    const [first] = group
+    const comments = group.map((record) => record.comment)
+    rows.push([
+      [first.memberName || '이름 미확인', first.period, first.fileName].filter(Boolean).join('\n'),
+      '업적',
+      '',
+      comments[0] ?? '',
+      comments[1] ?? '',
+      comments.length > 3 ? comments.slice(2).join('\n\n') : comments[2] ?? '',
+    ])
+    rows.push(['', '역량', '', '', '', ''])
+  })
+  if (rows.length === 1) rows.push(['', '업적', '', '', '', ''], ['', '역량', '', '', '', ''])
+
+  const sheet = XLSX.utils.aoa_to_sheet(rows)
+  sheet['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 48 }, { wch: 48 }, { wch: 48 }, { wch: 48 }]
+  sheet['!rows'] = rows.map((_, index) => ({ hpt: index === 0 ? 30 : 92 }))
+  sheet['!freeze'] = { xSplit: 2, ySplit: 1, topLeftCell: 'C2', activePane: 'bottomRight', state: 'frozen' }
+  sheet['!merges'] = []
+  for (let row = 1; row < rows.length; row += 2) sheet['!merges'].push({ s: { r: row, c: 0 }, e: { r: Math.min(row + 1, rows.length - 1), c: 0 } })
+
+  const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1:F1')
+  const thin = { style: 'thin' as const, color: { rgb: '1F2937' } }
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    for (let column = range.s.c; column <= range.e.c; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column })
+      const cell = sheet[address] ?? (sheet[address] = { t: 's', v: '' })
+      const groupIndex = Math.floor((row - 1) / 2)
+      const nameFill = groupIndex % 2 === 0 ? 'DCEAF7' : 'E3F2F4'
+      cell.s = {
+        font: { name: '맑은 고딕', sz: row === 0 ? 10 : 9, bold: row === 0 || column < 2, color: { rgb: row === 0 ? 'FFFFFF' : '111827' } },
+        fill: { patternType: 'solid', fgColor: { rgb: row === 0 ? (column < 2 ? '7A7A7A' : '00A94F') : column < 2 ? nameFill : 'FFFFFF' } },
+        alignment: { vertical: 'center', horizontal: row === 0 || column < 2 ? 'center' : 'left', wrapText: true },
+        border: { top: thin, right: thin, bottom: thin, left: thin },
+      }
+    }
+  }
+  XLSX.utils.book_append_sheet(workbook, sheet, '10_코멘트기록')
 }
 
 export function createFullBackupEnvelope(state: AppState, periodName: string): FullBackupEnvelope {
@@ -280,19 +372,7 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
     [14, 13, 18, 12, 28, 52],
   )
 
-  appendSheet(
-    workbook,
-    '10_코멘트기록',
-    [
-      ['팀원', '성과기간', '원본 파일', '코멘트'],
-      ...growthProfiles.flatMap((profile) => {
-        const memberName = state.members.find((member) => member.id === profile.memberId)?.name ?? ''
-        return (profile.importedPerformanceDocuments ?? []).flatMap((document) => (document.selectedComments ?? []).map((comment) => [memberName, document.periodLabel, document.fileName, comment]))
-      }),
-      ...state.meetingNotes.filter((note) => note.source === 'performance-pdf').flatMap((note) => note.comment.split(/\n{2,}/).map((comment) => [state.members.find((member) => member.id === note.memberId)?.name ?? '', note.sourcePeriod ?? '', note.sourceFileName ?? '', comment])),
-    ],
-    [14, 18, 30, 72],
-  )
+  appendCommentSheet(workbook, state, growthProfiles)
 
   workbook.SheetNames = ['01_과제 입력', '02_팀원 입력', '03_이전성과 입력', '04_피어리뷰 입력', '05_팀원 성과결과', '06_개인별 상세', '07_과제별 결과', '08_평가기준', '09_면담기록', '10_코멘트기록']
 
