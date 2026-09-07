@@ -133,7 +133,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
             <div className="px-3 py-3"><p className="text-[11px] font-medium text-slate-500">최종 기대 점수</p><div className="mt-1 flex flex-wrap items-baseline gap-1.5"><p className="text-lg font-semibold tabular-nums text-slate-950">{simulation.currentScore}점</p><span className={`text-xs font-semibold ${expectedGap >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{expectedGap >= 0 ? `+${expectedGap}점 충족` : `-${Math.abs(expectedGap)}점 필요`}</span></div></div>
           </div>
       </div> : null}
-      {member.personnelRecord && (!simulationPanelMinimized || !performancePanelMinimized) && <details className="border-b border-slate-200 py-3">
+      {member.personnelRecord && !performancePanelMinimized && <details className="border-b border-slate-200 py-3">
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <strong className="text-slate-800">인사·성장 이력</strong>
           <span className="text-slate-500">사번 {member.personnelRecord.employeeNumber || '-'} · 입사 {member.personnelRecord.hireDate || '-'} · 최근 승진 {member.personnelRecord.lastPromotionDate || '-'}</span>
@@ -146,7 +146,7 @@ export default function MemberGrowthOverview({ member, collapsedContent, onPanel
           {member.personnelRecord.awards.length > 0 && <section><h4 className="text-xs font-semibold text-slate-600">포상</h4><div className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200 bg-white">{member.personnelRecord.awards.slice(0, 6).map((item, index) => <div key={`${item.date}-${index}`} className="grid grid-cols-[88px_1fr] gap-2 px-3 py-2 text-xs"><span className="tabular-nums text-slate-500">{item.date}</span><span className="text-slate-600">{item.name}{item.reason ? ` · ${item.reason}` : ''}</span></div>)}</div></section>}
         </div>
       </details>}
-      {(profile.importedPerformanceDocuments?.length ?? 0) > 0 && (!simulationPanelMinimized || !performancePanelMinimized) && <details className="border-b border-slate-200 py-3">
+      {(profile.importedPerformanceDocuments?.length ?? 0) > 0 && !performancePanelMinimized && <details className="border-b border-slate-200 py-3">
         <summary className="flex cursor-pointer list-none items-center gap-3 text-sm"><strong className="text-slate-800">불러온 성과 상세</strong><span className="text-xs text-slate-400">PDF {profile.importedPerformanceDocuments!.length}건 · 과제별 가중치와 코멘트</span></summary>
         <div className="mt-3 space-y-3">{profile.importedPerformanceDocuments!.map((document) => <section key={document.id} className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-center gap-2"><strong className="text-sm text-slate-800">{document.periodLabel}</strong><span className="text-xs text-slate-500">최종 {document.finalGrade ?? '-'} · {document.fileName}</span></div><div className="mt-2 divide-y divide-slate-100">{document.tasks.map((task) => <div key={task.name} className="grid grid-cols-[1fr_48px_36px] gap-2 py-1.5 text-xs"><span className="text-slate-700">{task.name}</span><span className="text-right tabular-nums text-slate-500">{task.weightPercent ?? '-'}%</span><strong className="text-center text-slate-700">{task.grade ?? '-'}</strong></div>)}</div>{document.comments.length > 0 && <p className="mt-2 max-h-28 overflow-y-auto border-t border-slate-100 pt-2 text-xs leading-5 text-slate-600">{document.comments.join('\n')}</p>}</section>)}</div>
       </details>}
