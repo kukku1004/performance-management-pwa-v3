@@ -1,11 +1,7 @@
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import type { AppState, MemberGrowthProfile, WorkspaceState } from '../types'
 import {
-  IMPORTANCE_WEIGHT,
-  PERFORMANCE_SCORE,
   PERSONAL_GRADE_FACTOR,
-  WORKLOAD_FACTOR,
-  blendByWeight,
   calcAllTaskScores,
   calcMemberResults,
   calcPersonalGradeFactor,
@@ -36,10 +32,31 @@ function appendSheet(
   name: string,
   rows: (string | number | boolean)[][],
   widths: number[],
+  inputColumns: number[] = [],
 ) {
   const sheet = XLSX.utils.aoa_to_sheet(rows)
   sheet['!cols'] = widths.map((wch) => ({ wch }))
-  sheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+  sheet['!rows'] = rows.map((row, index) => ({ hpt: index === 0 ? 28 : row.some((value) => String(value).length > 50) ? 38 : 24 }))
+  sheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
+  if (rows.length > 0 && widths.length > 0) sheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(widths.length - 1)}${rows.length}` }
+  const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : null
+  if (range) {
+    for (let row = range.s.r; row <= range.e.r; row += 1) {
+      for (let column = range.s.c; column <= range.e.c; column += 1) {
+        const address = XLSX.utils.encode_cell({ r: row, c: column })
+        const cell = sheet[address]
+        if (!cell) continue
+        const bodyFill = inputColumns.includes(column) ? 'FFF1E6' : row % 2 === 0 ? 'F7F8FA' : 'FFFFFF'
+        const border = { style: 'thin' as const, color: { rgb: 'D9DEE7' } }
+        cell.s = {
+          font: { name: 'Arial', sz: row === 0 ? 10 : 9, bold: row === 0, color: { rgb: row === 0 ? 'FFFFFF' : '111827' } },
+          fill: { patternType: 'solid', fgColor: { rgb: row === 0 ? '17233B' : bodyFill } },
+          alignment: { vertical: 'center', horizontal: row === 0 ? 'center' : typeof cell.v === 'number' ? 'right' : 'left', wrapText: true },
+          border: { top: border, right: border, bottom: border, left: border },
+        }
+      }
+    }
+  }
   XLSX.utils.book_append_sheet(workbook, sheet, name)
 }
 
@@ -89,7 +106,7 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
 
   appendSheet(
     workbook,
-    '01_팀원 성과결과',
+    '05_팀원 성과결과',
     [
       ['평가기간', '순위', '팀원', '직급', '직책', '역할', '참여 과제 수', '성과점수', '누적점수', '최종 고과'],
       ...results.map((row, index) => [
@@ -110,82 +127,42 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
 
   appendSheet(
     workbook,
-    '02_과제관리',
+    '01_과제 입력',
     [
-      ['평가기간', '과제명', '과제등급', '중요도 적용계수', '성과등급', '성과등급 점수', '업무량', '업무량 적용계수', '과제점수', '목표', '성과'],
+      ['과제명', '과제등급', '업무량', '목표', '성과', '성과등급'],
       ...state.tasks.map((task) => [
-        periodName,
         task.name,
         task.importance,
-        Number(blendByWeight(1, IMPORTANCE_WEIGHT[task.importance], state.criteria.taskGradeWeight).toFixed(2)),
-        task.performanceGrade,
-        Number(blendByWeight(100, PERFORMANCE_SCORE[task.performanceGrade], state.criteria.performanceGradeWeight).toFixed(1)),
         task.workload,
-        Number(blendByWeight(1, WORKLOAD_FACTOR[task.workload], state.criteria.workloadWeight).toFixed(2)),
-        Number((taskScoreMap.get(task.id) ?? 0).toFixed(1)),
-        task.objective || '-',
-        task.achievement || '-',
+        task.objective || '',
+        task.achievement || '',
+        task.performanceGrade,
       ]),
     ],
-    [18, 24, 11, 16, 11, 16, 9, 16, 12, 28, 28],
+    [26, 12, 10, 34, 34, 12],
+    [0, 1, 2, 3, 4, 5],
   )
 
   appendSheet(
     workbook,
-    '03_팀원관리',
+    '02_팀원 입력',
     [
-      ['평가기간', '이름', '직급', '직책', '연차', '역할', '활성여부', '코멘트'],
+      ['이름', '직책', '직급', '연차', '역할', '코멘트'],
       ...state.members.map((member) => [
-        periodName,
         member.name,
-        member.level || '',
         member.position || '',
+        member.level || '',
         member.yearsOfService ?? '',
         member.role || '',
-        member.active ? '사용' : '미사용',
         member.comment || '',
       ]),
     ],
-    [18, 14, 10, 10, 8, 16, 11, 32],
-  )
-
-  appendSheet(
-    workbook,
-    '04_기여도평가',
-    [
-      ['평가기간', '과제명', '팀원', '기여도(%)', '자동배분 여부'],
-      ...state.contributions.map((contribution) => [
-        periodName,
-        state.tasks.find((task) => task.id === contribution.taskId)?.name ?? '(삭제된 과제)',
-        state.members.find((member) => member.id === contribution.memberId)?.name ?? '(삭제된 팀원)',
-        contribution.contributionPercent,
-        contribution.isAutoDistributed ? '예' : '아니오',
-      ]),
-    ],
-    [18, 24, 14, 12, 14],
-  )
-
-  appendSheet(
-    workbook,
-    '05_개인수행평가',
-    [
-      ['평가기간', '과제명', '팀원', '개인 수행등급', '평가 근거', '원래 수행계수', '실제 적용계수', '기준 사용여부'],
-      ...state.contributions.map((contribution) => [
-        periodName,
-        state.tasks.find((task) => task.id === contribution.taskId)?.name ?? '(삭제된 과제)',
-        state.members.find((member) => member.id === contribution.memberId)?.name ?? '(삭제된 팀원)',
-        contribution.personalPerformanceGrade,
-        contribution.evaluationNote ?? '',
-        PERSONAL_GRADE_FACTOR[contribution.personalPerformanceGrade],
-        Number(calcPersonalGradeFactor(contribution, state.criteria).toFixed(2)),
-        state.criteria.personalGradeWeight > 0 ? '사용' : '미사용',
-      ]),
-    ],
-    [18, 24, 14, 15, 32, 15, 15, 14],
+    [14, 12, 12, 10, 22, 36],
+    [0, 1, 2, 3, 4, 5],
   )
 
   const detailRows: (string | number | boolean)[][] = [
-    ['평가기간', '팀원', '과제명', '과제점수', '기여도(%)', '개인 수행등급', '평가 근거', '개인 수행계수', '개인점수'],
+    ['평가기간', '팀원', '과제명', '과제점수', '기여도(%)', '자동배분 여부', '개인 수행등급', '평가 근거', '원래 수행계수', '실제 적용계수', '개인점수'],
   ]
   for (const member of state.members) {
     for (const task of state.tasks) {
@@ -199,14 +176,16 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
         task.name,
         Number(taskScore.toFixed(1)),
         contribution.contributionPercent,
+        contribution.isAutoDistributed ? '예' : '아니오',
         contribution.personalPerformanceGrade,
         contribution.evaluationNote ?? '',
+        PERSONAL_GRADE_FACTOR[contribution.personalPerformanceGrade],
         Number(personalFactor.toFixed(2)),
         Number((taskScore * (contribution.contributionPercent / 100) * personalFactor).toFixed(1)),
       ])
     }
   }
-  appendSheet(workbook, '06_개인별 상세', detailRows, [18, 14, 24, 12, 12, 15, 32, 15, 12])
+  appendSheet(workbook, '06_개인별 상세', detailRows, [18, 14, 26, 12, 12, 14, 15, 36, 15, 15, 12])
 
   appendSheet(
     workbook,
@@ -246,7 +225,7 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
 
   appendSheet(
     workbook,
-    '09_이전성과',
+    '03_이전성과 입력',
     [
       ['이름', '직급', '승진심사 시기', '평가연도', '업적(상)', '업적(하)', '역량'],
       ...growthProfiles.flatMap((profile) => {
@@ -263,11 +242,12 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
       }),
     ],
     [14, 10, 17, 12, 12, 12, 12],
+    [0, 1, 2, 3, 4, 5, 6],
   )
 
   appendSheet(
     workbook,
-    '10_피어리뷰',
+    '04_피어리뷰 입력',
     [
       ['과제명', '리뷰어', '대상팀원', '기여도(%)', '수행등급', '근거'],
       ...state.peerReviews.map((review) => [
@@ -280,18 +260,19 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
       ]),
     ],
     [24, 14, 14, 13, 12, 48],
+    [0, 1, 2, 3, 4, 5],
   )
 
   appendSheet(
     workbook,
-    '11_면담기록',
+    '09_면담기록',
     [
       ['팀원', '면담일', '성과기간', '출처', '원본 파일', '면담 내용'],
-      ...state.meetingNotes.map((note) => [
+      ...state.meetingNotes.filter((note) => note.source !== 'performance-pdf').map((note) => [
         state.members.find((member) => member.id === note.memberId)?.name ?? '',
         note.date,
         note.sourcePeriod ?? '',
-        note.source === 'performance-pdf' ? '성과 PDF' : '직접 작성',
+        '직접 작성',
         note.sourceFileName ?? '',
         note.comment,
       ]),
@@ -299,11 +280,27 @@ export function createFullBackupWorkbook(state: AppState, periodName: string, gr
     [14, 13, 18, 12, 28, 52],
   )
 
+  appendSheet(
+    workbook,
+    '10_코멘트기록',
+    [
+      ['팀원', '성과기간', '원본 파일', '코멘트'],
+      ...growthProfiles.flatMap((profile) => {
+        const memberName = state.members.find((member) => member.id === profile.memberId)?.name ?? ''
+        return (profile.importedPerformanceDocuments ?? []).flatMap((document) => (document.selectedComments ?? []).map((comment) => [memberName, document.periodLabel, document.fileName, comment]))
+      }),
+      ...state.meetingNotes.filter((note) => note.source === 'performance-pdf').flatMap((note) => note.comment.split(/\n{2,}/).map((comment) => [state.members.find((member) => member.id === note.memberId)?.name ?? '', note.sourcePeriod ?? '', note.sourceFileName ?? '', comment])),
+    ],
+    [14, 18, 30, 72],
+  )
+
+  workbook.SheetNames = ['01_과제 입력', '02_팀원 입력', '03_이전성과 입력', '04_피어리뷰 입력', '05_팀원 성과결과', '06_개인별 상세', '07_과제별 결과', '08_평가기준', '09_면담기록', '10_코멘트기록']
+
   return workbook
 }
 
 export function workbookToBlob(workbook: XLSX.WorkBook): Blob {
-  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array', cellStyles: true })
   return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
 
@@ -318,12 +315,16 @@ export function createWorkspaceBackupEnvelope(workspace: WorkspaceState) {
 export function createWorkspaceBackupWorkbook(workspace: WorkspaceState): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new()
   const teamNameById = new Map(workspace.teams.map((team) => [team.id, team.name]))
-  appendSheet(workbook, '01_팀', [['팀명', '팀원 수', '프로젝트 수'], ...workspace.teams.map((team) => [team.name, team.members.length, workspace.projects.filter((project) => project.teamId === team.id).length])], [24, 12, 14])
-  appendSheet(workbook, '02_프로젝트', [['팀', '평가기간', '과제 수', '팀원 수', '수정일'], ...workspace.projects.map((project) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), project.appState.tasks.length, project.appState.members.length, project.updatedAt])], [24, 18, 12, 12, 24])
-  appendSheet(workbook, '03_팀원', [['팀', '평가기간', '이름', '직급', '직책', '연차', '역할'], ...workspace.projects.flatMap((project) => project.appState.members.map((member) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), member.name, member.level || '-', member.position || '-', member.yearsOfService ?? '-', member.role || '-']))], [20, 18, 14, 10, 10, 8, 18])
-  appendSheet(workbook, '04_과제', [['팀', '평가기간', '과제명', '중요도', '성과등급', '업무량', '목표', '성과'], ...workspace.projects.flatMap((project) => project.appState.tasks.map((task) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), task.name, task.importance, task.performanceGrade, task.workload, task.objective || '-', task.achievement || '-']))], [20, 18, 24, 10, 10, 10, 30, 30])
-  appendSheet(workbook, '05_성과결과', [['팀', '평가기간', '팀원', '성과점수', '누적점수', '최종 고과'], ...workspace.projects.flatMap((project) => calcMemberResults(project.appState.members, project.appState.tasks, project.appState.contributions, project.appState.criteria, project.appState.peerReviews).map((result) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), result.member.name, Number(result.performanceScore.toFixed(1)), Number(result.cumulativeScore.toFixed(1)), result.grade]))], [20, 18, 14, 12, 12, 12])
-  appendSheet(workbook, '06_면담기록', [['팀', '평가기간', '팀원', '면담일', '성과기간', '출처', '원본 파일', '내용'], ...workspace.projects.flatMap((project) => project.appState.meetingNotes.map((note) => [teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), project.appState.members.find((member) => member.id === note.memberId)?.name ?? '-', note.date, note.sourcePeriod ?? '', note.source === 'performance-pdf' ? '성과 PDF' : '직접 작성', note.sourceFileName ?? '', note.comment]))], [20, 18, 14, 14, 18, 12, 28, 48])
+  appendSheet(workbook, '전체 프로젝트 목록', [['번호', '팀', '평가기간', '과제 수', '팀원 수', '수정일'], ...workspace.projects.map((project, index) => [index + 1, teamNameById.get(project.teamId) ?? '-', formatEvaluationPeriod(project.period), project.appState.tasks.length, project.appState.members.length, project.updatedAt])], [8, 22, 18, 12, 12, 24])
+  workspace.projects.forEach((project, projectIndex) => {
+    const growthProfiles = workspace.teams.find((team) => team.id === project.teamId)?.growthProfiles ?? []
+    const projectWorkbook = createFullBackupWorkbook(project.appState, formatEvaluationPeriod(project.period), growthProfiles)
+    projectWorkbook.SheetNames.forEach((sheetName) => {
+      const prefix = `P${projectIndex + 1}_`
+      const name = `${prefix}${sheetName}`.slice(0, 31)
+      XLSX.utils.book_append_sheet(workbook, projectWorkbook.Sheets[sheetName], name)
+    })
+  })
   return workbook
 }
 

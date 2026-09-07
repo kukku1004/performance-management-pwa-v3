@@ -55,8 +55,11 @@ export default function GoogleDriveDialog({
   onResetWorkspace,
   onClose,
   teamName,
+  projectId,
   periodLabel,
 }: GoogleDriveDialogProps) {
+  const activeProject = workspace.projects.find((project) => project.id === projectId)
+  const growthProfiles = workspace.teams.find((team) => team.id === activeProject?.teamId)?.growthProfiles ?? []
   const [connected, setConnected] = useState(isGoogleDriveConnected())
   const [driveEmail, setDriveEmail] = useState(getConnectedGoogleAccount()?.email ?? '')
   const [activeTab, setActiveTab] = useState<'local' | 'drive' | 'reset'>('local')
@@ -130,7 +133,7 @@ export default function GoogleDriveDialog({
   function handleSave() {
     void run(async () => {
       if (!periodName.trim()) throw new Error('평가기간명을 입력하세요.')
-      const result = await saveFullBackupToDrive(state, periodName, saveMode, teamName)
+      const result = await saveFullBackupToDrive(state, periodName, saveMode, teamName, growthProfiles)
       setMessage(`저장 완료: 성장관리/${teamName ? `${teamName}/` : ''}${result.periodFolder.name}`)
       await refreshBackups()
     })
@@ -191,7 +194,7 @@ export default function GoogleDriveDialog({
     const filename = kind === 'json' ? `${safePeriodName}_성장관리_data.json` : `${safePeriodName}_성과관리.xlsx`
     const blob = kind === 'json'
       ? backupToJsonBlob(createFullBackupEnvelope(state, periodName.trim()))
-      : workbookToBlob(createFullBackupWorkbook(state, periodName.trim()))
+      : workbookToBlob(createFullBackupWorkbook(state, periodName.trim(), growthProfiles))
     if (!backupDirectory) {
       downloadBlob(blob, filename)
       if (!quiet) setMessage(`${filename} 파일을 기본 다운로드 폴더에 저장했습니다.`)

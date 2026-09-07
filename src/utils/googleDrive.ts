@@ -1,4 +1,4 @@
-import type { AppState, WorkspaceState } from '../types'
+import type { AppState, MemberGrowthProfile, WorkspaceState } from '../types'
 import {
   backupToJsonBlob,
   createFullBackupEnvelope,
@@ -371,6 +371,7 @@ export async function saveFullBackupToDrive(
   periodName: string,
   mode: 'update' | 'version',
   teamName?: string,
+  growthProfiles: MemberGrowthProfile[] = [],
 ): Promise<DriveSaveResult> {
   const safePeriodName = sanitizePeriodName(periodName)
   if (!safePeriodName) throw new Error('평가기간명을 입력하세요.')
@@ -382,7 +383,7 @@ export async function saveFullBackupToDrive(
   const periodFolder = await findOrCreateFolder(safePeriodName, parentFolder.id, 'period-folder', periodName.trim())
   await findOrCreateFolder('개인리포트', periodFolder.id, 'personal-reports-folder', periodName.trim())
 
-  const workbookBlob = workbookToBlob(createFullBackupWorkbook(state, periodName.trim()))
+  const workbookBlob = workbookToBlob(createFullBackupWorkbook(state, periodName.trim(), growthProfiles))
   const backup = createFullBackupEnvelope(state, periodName.trim())
   const jsonBlob = backupToJsonBlob(backup)
   const suffix = mode === 'version' ? `_${versionSuffix()}` : ''

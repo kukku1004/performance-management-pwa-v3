@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { sendGoogleInvitationEmails } from '../utils/googleDrive'
 import ModalCloseButton from './ModalCloseButton'
 
