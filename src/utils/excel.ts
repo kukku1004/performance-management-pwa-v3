@@ -723,6 +723,7 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
 
     const existing = byName.get(name)
     const member: TeamMember = {
+      ...existing,
       id: existing?.id ?? uuidv4(),
       name,
       active: existing?.active ?? true,
@@ -731,6 +732,7 @@ export function parseMemberWorkbook(buffer: ArrayBuffer, existingMembers: TeamMe
       yearsOfService,
       role,
       comment,
+      ...(existing?.personnelRecord ? { personnelRecord: existing.personnelRecord } : {}),
     }
     byName.set(name, member)
     importedCount += 1

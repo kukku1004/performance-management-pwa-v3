@@ -54,6 +54,21 @@ export function applyMemberTenure(profile: MemberGrowthProfile, member: { yearsO
   return { ...profile, auxiliaryMetrics: { ...auxiliaryMetrics, tenure } }
 }
 
+export function auxiliaryMetricsFromPersonnelRecord(member: {
+  position: string
+  yearsOfService: number | null
+  personnelRecord?: { education: unknown[]; awards: unknown[] }
+}) {
+  return {
+    position: member.position === '팀장' ? 1 : 0,
+    rewardPenalty: member.personnelRecord?.awards.length ?? 0,
+    tenure: member.yearsOfService !== null && Number.isFinite(member.yearsOfService) ? member.yearsOfService : 0,
+    tenureOverridden: true,
+    education: member.personnelRecord?.education.length ?? 0,
+    source: 'personnel-record' as const,
+  }
+}
+
 export const PROMOTION_RULES: Record<Exclude<Level, '부장'>, { next: Level; years: number; target: number }> = {
   사원: { next: '대리', years: 3, target: 36 },
   대리: { next: '과장', years: 4, target: 50 },

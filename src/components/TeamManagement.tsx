@@ -4,6 +4,7 @@ import { useAppState } from '../state/AppContext'
 import type { Level, Position, TeamMember } from '../types'
 import { LEVEL_OPTIONS, POSITION_OPTIONS } from '../types'
 import { calcMemberParticipation } from '../utils/calculations'
+import { auxiliaryMetricsFromPersonnelRecord, getDefaultGrowthProfile } from '../utils/growth'
 import { downloadMemberTemplate, parseMemberWorkbook, type MemberImportResult } from '../utils/excel'
 import ConfirmDialog from './ConfirmDialog'
 import ImportFeedback from './ImportFeedback'
@@ -27,7 +28,7 @@ const EMPTY_MEMBER_FORM: MemberForm = { name: '', position: '', level: '', years
 
 export default function TeamManagement() {
   const { state, dispatch } = useAppState()
-  const { activeTeam } = useWorkspace()
+  const { activeTeam, saveGrowthProfile } = useWorkspace()
   const [newForm, setNewForm] = useState<MemberForm>(EMPTY_MEMBER_FORM)
   const [newFormError, setNewFormError] = useState('')
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
@@ -112,13 +113,21 @@ export default function TeamManagement() {
     let updatedCount = 0
     let importedHistoryCount = 0
     let hasPersonnelRecord = false
+    const personnelMemberIds = new Set<string>()
     const addedIds: string[] = []
     const errors: string[] = []
 
     for (const file of Array.from(files)) {
       try {
         const buffer = await file.arrayBuffer()
+        const previousMembers = members
         const result = parseMemberWorkbook(buffer, members)
+        if (result.sourceType === 'personnel-record') {
+          result.members.forEach((member) => {
+            const previous = previousMembers.find((item) => item.id === member.id)
+            if (member.personnelRecord && previous?.personnelRecord?.importedAt !== member.personnelRecord.importedAt) personnelMemberIds.add(member.id)
+          })
+        }
         members = result.members
         importedCount += result.importedCount
         addedCount += result.addedCount
@@ -143,6 +152,12 @@ export default function TeamManagement() {
       importedHistoryCount,
     }
     dispatch({ type: 'IMPORT_MEMBERS', payload: members })
+    personnelMemberIds.forEach((memberId) => {
+      const member = members.find((item) => item.id === memberId)
+      if (!member) return
+      const current = activeTeam?.growthProfiles.find((profile) => profile.memberId === memberId) ?? getDefaultGrowthProfile(memberId)
+      saveGrowthProfile({ ...current, auxiliaryMetrics: auxiliaryMetricsFromPersonnelRecord(member) })
+    })
     setImportResult(result)
     setRecentlyAddedIds(new Set(addedIds))
     setSelectedMemberIds(new Set())

@@ -121,6 +121,7 @@ function parseMemberSheet(rows: unknown[][]): ParsedGrowthItem | null {
     rewardPenalty: Number(rows[headerIndex + 3]?.[14]) || 0,
     tenure: Number(rows[headerIndex + 4]?.[14]) || 0,
     education: Number(rows[headerIndex + 5]?.[14]) || 0,
+    source: 'growth-file' as const,
   }
   return { name: memberName, records, promotionReviewDate, positionYears, auxiliaryMetrics }
 }
@@ -151,12 +152,14 @@ export function parseGrowthHistoryWorkbook(buffer: ArrayBuffer, members: TeamMem
       continue
     }
     const current = byMemberId.get(member.id) ?? getDefaultGrowthProfile(member.id)
+    const protectedAuxiliaryMetrics = current.auxiliaryMetrics?.source === 'personnel-record'
+      || current.auxiliaryMetrics?.source === 'manual'
     byMemberId.set(member.id, {
       ...current,
       performanceHistory: mergeRecords(current.performanceHistory, item.records),
       ...(item.promotionReviewDate ? { promotionReviewDate: item.promotionReviewDate } : {}),
       ...(item.positionYears ? { positionYears: item.positionYears } : {}),
-      ...(item.auxiliaryMetrics ? { auxiliaryMetrics: item.auxiliaryMetrics } : {}),
+      ...(item.auxiliaryMetrics && !protectedAuxiliaryMetrics ? { auxiliaryMetrics: item.auxiliaryMetrics } : {}),
     })
     importedMembers.push(member.name)
   }

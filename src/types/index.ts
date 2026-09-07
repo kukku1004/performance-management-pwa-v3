@@ -212,6 +212,7 @@ export interface GrowthAuxiliaryMetrics {
   tenure: number
   tenureOverridden?: boolean
   education: number
+  source?: 'personnel-record' | 'growth-file' | 'manual'
 }
 
 export interface EvaluationProject {
