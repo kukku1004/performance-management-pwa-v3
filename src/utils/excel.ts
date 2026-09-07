@@ -576,6 +576,30 @@ function valueAfterPersonnelLabel(rows: unknown[][], label: string) {
   return ''
 }
 
+function parsePersonnelEducation(rows: unknown[][]) {
+  const sectionRow = rows.findIndex((row) => row.some((value) => compactPersonnelLabel(value) === '교육이수사항'))
+  if (sectionRow < 0) return []
+  const headerRowIndex = rows.findIndex((row, index) => index > sectionRow && row.some((value) => compactPersonnelLabel(value) === '과정명'))
+  if (headerRowIndex < 0) return []
+  const header = rows[headerRowIndex]
+  const periodColumn = header.findIndex((value) => compactPersonnelLabel(value) === '교육기간')
+  const courseColumn = header.findIndex((value) => compactPersonnelLabel(value) === '과정명')
+  const scoreColumn = header.findIndex((value) => compactPersonnelLabel(value) === '점수')
+  if (periodColumn < 0 || courseColumn < 0) return []
+  const endRow = rows.findIndex((row, index) => index > headerRowIndex && row.some((value) => ['포상사항', '징계사항'].includes(compactPersonnelLabel(value))))
+  return rows.slice(headerRowIndex + 1, endRow < 0 ? rows.length : endRow).flatMap((row) => {
+    const dates = row.slice(periodColumn, courseColumn).map(personnelDate).filter(Boolean)
+    const courseName = String(row[courseColumn] ?? '').trim()
+    if (dates.length === 0 || !courseName || compactPersonnelLabel(courseName) === '과정명') return []
+    return [{
+      startDate: dates[0],
+      endDate: dates[1] || dates[0],
+      courseName,
+      score: scoreColumn >= 0 ? String(row[scoreColumn] ?? '').trim() : '',
+    }]
+  })
+}
+
 function parsePersonnelRecordWorkbook(buffer: ArrayBuffer, existingMembers: TeamMember[]): MemberImportResult | null {
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
@@ -594,12 +618,7 @@ function parsePersonnelRecordWorkbook(buffer: ArrayBuffer, existingMembers: Team
     if (!date || !type || compactPersonnelLabel(type) === '발령종류') return []
     return [{ date, type, company: String(row[12] ?? '').trim(), department: String(row[18] ?? '').trim(), employmentType: String(row[25] ?? '').trim(), jobTitle: String(row[33] ?? '').trim(), position: String(row[39] ?? '').trim(), workplace: String(row[46] ?? '').trim() }]
   })
-  const education = rows.flatMap((row) => {
-    const startDate = personnelDate(row[28])
-    const courseName = String(row[39] ?? '').trim()
-    if (!startDate || !courseName || compactPersonnelLabel(courseName) === '과정명') return []
-    return [{ startDate, endDate: personnelDate(row[35]) || startDate, courseName, score: String(row[52] ?? '').trim() }]
-  })
+  const education = parsePersonnelEducation(rows)
   const careerHeader = rows.findIndex((row) => row.some((value) => compactPersonnelLabel(value) === '경력사항'))
   const careerEnd = rows.findIndex((row, index) => index > careerHeader && row.some((value) => compactPersonnelLabel(value) === '자격사항'))
   const careers = rows.slice(Math.max(0, careerHeader + 2), careerEnd < 0 ? rows.length : careerEnd).flatMap((row) => {
