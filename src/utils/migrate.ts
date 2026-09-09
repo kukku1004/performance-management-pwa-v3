@@ -131,28 +131,22 @@ const LEGACY_SAMPLE_TASKS = [
   { name: 'Design System', importance: '핵심', performanceGrade: 'S', workload: '중' },
   { name: 'OneClick', importance: '일반', performanceGrade: 'B', workload: '소' },
 ]
-const LEGACY_SAMPLE_MEMBERS = [
-  { name: '김기정', position: '팀장', level: '과장', yearsOfService: 7, role: '기획' },
-  { name: '이혜원', position: 'PL', level: '대리', yearsOfService: 4, role: '디자인' },
-  { name: '서승우', position: '팀원', level: '사원', yearsOfService: 2, role: '개발' },
+const LEGACY_SAMPLE_MEMBER_FIELDS = [
+  { position: '팀장', level: '과장', yearsOfService: 7, role: '기획' },
+  { position: 'PL', level: '대리', yearsOfService: 4, role: '디자인' },
+  { position: '팀원', level: '사원', yearsOfService: 2, role: '개발' },
 ]
-const LEGACY_SAMPLE_CONTRIBUTIONS: Record<string, [number, PerformanceGrade]> = {
-  'CloudX|김기정': [50, 'A'],
-  'CloudX|이혜원': [30, 'B'],
-  'CloudX|서승우': [20, 'B'],
-  'Design System|김기정': [20, 'B'],
-  'Design System|이혜원': [50, 'S'],
-  'Design System|서승우': [30, 'A'],
-  'OneClick|김기정': [30, 'B'],
-  'OneClick|이혜원': [30, 'B'],
-  'OneClick|서승우': [40, 'A'],
+const LEGACY_SAMPLE_CONTRIBUTION_FIELDS: Record<string, Array<[number, PerformanceGrade]>> = {
+  CloudX: [[50, 'A'], [30, 'B'], [20, 'B']],
+  'Design System': [[20, 'B'], [50, 'S'], [30, 'A']],
+  OneClick: [[30, 'B'], [30, 'B'], [40, 'A']],
 }
 
 export function isUntouchedLegacySample(state: AppState): boolean {
   if (state.meetingNotes.length > 0 || state.peerReviews.length > 0) return false
   if (state.tasks.length !== LEGACY_SAMPLE_TASKS.length) return false
-  if (state.members.length !== LEGACY_SAMPLE_MEMBERS.length) return false
-  if (state.contributions.length !== Object.keys(LEGACY_SAMPLE_CONTRIBUTIONS).length) return false
+  if (state.members.length !== LEGACY_SAMPLE_MEMBER_FIELDS.length) return false
+  if (state.contributions.length !== Object.values(LEGACY_SAMPLE_CONTRIBUTION_FIELDS).flat().length) return false
 
   const tasksMatch = LEGACY_SAMPLE_TASKS.every((fixture) =>
     state.tasks.some(
@@ -165,10 +159,9 @@ export function isUntouchedLegacySample(state: AppState): boolean {
   )
   if (!tasksMatch) return false
 
-  const membersMatch = LEGACY_SAMPLE_MEMBERS.every((fixture) =>
+  const membersMatch = LEGACY_SAMPLE_MEMBER_FIELDS.every((fixture) =>
     state.members.some(
       (m) =>
-        m.name === fixture.name &&
         m.position === fixture.position &&
         m.level === fixture.level &&
         m.yearsOfService === fixture.yearsOfService &&
@@ -177,12 +170,15 @@ export function isUntouchedLegacySample(state: AppState): boolean {
   )
   if (!membersMatch) return false
 
-  const taskNameById = new Map(state.tasks.map((t) => [t.id, t.name]))
-  const memberNameById = new Map(state.members.map((m) => [m.id, m.name]))
-  return state.contributions.every((c) => {
-    const key = `${taskNameById.get(c.taskId)}|${memberNameById.get(c.memberId)}`
-    const fixture = LEGACY_SAMPLE_CONTRIBUTIONS[key]
-    return fixture && fixture[0] === c.contributionPercent && fixture[1] === c.personalPerformanceGrade
+  return Object.entries(LEGACY_SAMPLE_CONTRIBUTION_FIELDS).every(([taskName, fixtures]) => {
+    const task = state.tasks.find((item) => item.name === taskName)
+    if (!task) return false
+    const actual = state.contributions
+      .filter((item) => item.taskId === task.id)
+      .map((item) => `${item.contributionPercent}:${item.personalPerformanceGrade}`)
+      .sort()
+    const expected = fixtures.map(([percent, grade]) => `${percent}:${grade}`).sort()
+    return actual.length === expected.length && actual.every((value, index) => value === expected[index])
   })
 }
 

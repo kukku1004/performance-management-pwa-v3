@@ -29,6 +29,7 @@ jobs:
         env:
           VITE_BASE_PATH: /performance-management-pwa-v3/
           VITE_GOOGLE_CLIENT_ID: 561236899589-hr7danecihp38b009nm3sqo7tb2cd6im.apps.googleusercontent.com
+          VITE_ADMIN_EMAILS: ${{ secrets.VITE_ADMIN_EMAILS }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
